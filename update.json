@@ -1,7 +1,7 @@
 {
-  "version": "1.6.2",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.6.2.zip",
+  "version": "1.7.0",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.7.0.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Conformité : la remise à zéro ne supprime jamais un document émis (conservation 10 ans).\nNumérotation des factures et avoirs continue, sans trou.\nOrdre chronologique vérifié pour les avoirs, rappel de la date de prestation."
+  "changelog": "Relance automatique des devis sans réponse (après 7 jours par défaut, un seul e-mail, modèle personnalisable).\nBouton « Relancer maintenant » sur les devis envoyés.\nConformité : documents émis jamais supprimés, numérotation continue."
 }

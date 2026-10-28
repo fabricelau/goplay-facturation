@@ -702,13 +702,15 @@ function vParams(){
     <div class="row"><button class="btn" data-modetest="toggle">${S.settings.modeTest?'Quitter le mode test':'Passer en mode test'}</button>${(S.allDocs||[]).some(d=>d.test)?`<button class="btn danger" id="clear-test">Supprimer tous les documents de test</button>`:''}</div>
   </div></div>
   <div class="panel" style="border-color:var(--danger)"><div class="sec-title" style="color:var(--danger)">Remise à zéro</div><div class="body" style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px">
-    <span class="muted" style="font-size:14px">Supprime tous les devis, factures et avoirs (vrais et de test) pour repartir de zéro, par exemple avant de commencer à facturer pour de vrai. Tes réglages, clients, catalogue et formules sont conservés. La numérotation repart des numéros indiqués plus haut.</span>
-    <span class="muted" style="font-size:14px"><b>À utiliser seulement avant de facturer pour de vrai</b> : une fois des factures envoyées à des clients, la loi interdit de les supprimer.</span>
+    <span class="muted" style="font-size:14px">Supprime les documents de test et les brouillons pour repartir propre. Tes réglages, clients, catalogue et formules sont conservés.</span>
+    <span class="muted" style="font-size:14px">Les devis, factures et avoirs émis (hors test) ne sont <b>jamais</b> supprimés : la loi impose de garder les factures 10 ans, sans trou dans la numérotation.</span>
     <div class="row"><button class="btn danger" id="reset-all">Supprimer les tests et brouillons (${(S.allDocs||S.docs).filter(d=>!(d.numero&&!d.test)).length})</button></div>
   </div></div>
   <div class="panel"><div class="sec-title">Modèles d'e-mails</div><div class="body" style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px">
     <span class="muted" style="font-size:14px">Le texte préparé quand tu cliques sur « Envoyer par e-mail » ou « Envoyer une relance ».</span>
-    ${['devis','facture','relance'].map(k=>`<div class="row" style="justify-content:space-between"><span>${MAIL_LBL[k]} ${mailTpl(k).perso?'<span class="pill p-acc">Personnalisé</span>':'<span class="pill p-draft">Texte d\'origine</span>'}</span><button class="btn sm" data-tpl="${k}">Modifier</button></div>`).join('')}
+    <div class="row" style="flex-wrap:wrap;gap:8px"><label for="p-relanceDevisAuto" style="font-weight:600">Relance automatique des devis sans réponse</label><select id="p-relanceDevisAuto" data-p="relanceDevisAuto" style="width:auto"><option value="true" ${relanceOn()?'selected':''}>Oui</option><option value="false" ${!relanceOn()?'selected':''}>Non</option></select><span>après</span><input type="number" id="p-relanceDevisJours" data-p="relanceDevisJours" min="1" max="60" value="${relanceDays()}" style="width:70px"><span>jours</span></div>
+    <span class="muted" style="font-size:13px">Un seul e-mail de relance, envoyé par le site le matin, si le devis est toujours « Envoyé » (ni accepté, ni refusé), encore valable et que le client a une adresse e-mail. Tu reçois une copie. Pense à cliquer sur Enregistrer en haut.</span>
+    ${['devis','facture','relance','relanceDevis'].map(k=>`<div class="row" style="justify-content:space-between"><span>${MAIL_LBL[k]} ${mailTpl(k).perso?'<span class="pill p-acc">Personnalisé</span>':'<span class="pill p-draft">Texte d\'origine</span>'}</span><button class="btn sm" data-tpl="${k}">Modifier</button></div>`).join('')}
   </div></div>
   <div class="panel"><div class="panel-h"><h2>Export pour ton comptable</h2><button class="btn" id="export-csv">${ICON.dl} Toutes les factures (CSV)</button></div>
     <div class="body" style="padding:14px 16px;color:var(--muted);font-size:14px;display:flex;flex-direction:column;gap:10px">
@@ -957,7 +959,7 @@ function roActions(d){
     :d.type==='devis'?`<dl class="kv"><dt>Total TTC</dt><dd class="num">${eur(t.ttc)}</dd><dt>Valable jusqu'au</dt><dd>${fmtDate(d.validite)}</dd>${acomptesOf(d).map(a=>`<dt>Acompte</dt><dd class="num">${esc(a.numero||'brouillon')} · ${eur(totals(a).ttc)}</dd>`).join('')}${acomptesOf(d).length?`<dt>Reste à facturer</dt><dd class="num">${eur(t.ttc-acomptesOf(d).reduce((x,a)=>x+totals(a).ttc,0))}</dd>`:''}${d.factureNumero?`<dt>Facture</dt><dd class="num">${esc(d.factureNumero)}</dd>`:''}${d.acceptation?`<dt>Accepté en ligne</dt><dd>${fmtDate((d.acceptation.date||'').slice(0,10))}${d.acceptation.date?' à '+d.acceptation.date.slice(11,16).replace(':','h'):''}<br><span class="muted">par ${esc(d.acceptation.nom||'')}</span></dd>`:''}</dl>`
     :`<dl class="kv"><dt>Montant</dt><dd class="num">${eur(-t.ttc)}</dd><dt>Sur facture</dt><dd class="num">${esc(d.avoirDe||'—')}</dd></dl>`;
   const lastSend=(d.envois||[]).slice(-1)[0];
-  main+=`<button class="btn ${d.type==='devis'&&d.statut==='emis'?'primary':''}" data-act="mail">Envoyer par e-mail</button>${d.type==='facture'&&(st==='emise'||st==='retard')?`<button class="btn ${st==='retard'?'primary':''}" data-act="relance">Envoyer une relance</button>`:''}${lastSend?`<span class="muted" style="font-size:12.5px">Dernier e-mail préparé le ${fmtDate(lastSend.date)} (${lastSend.kind==='relance'?'relance':'envoi'})</span>`:''}`;
+  main+=`<button class="btn ${d.type==='devis'&&d.statut==='emis'?'primary':''}" data-act="mail">Envoyer par e-mail</button>${d.type==='facture'&&(st==='emise'||st==='retard')?`<button class="btn ${st==='retard'?'primary':''}" data-act="relance">Envoyer une relance</button>`:''}${d.type==='devis'&&d.statut==='envoye'?`<button class="btn" data-act="relance">Relancer maintenant</button>`:''}${lastSend?`<span class="muted" style="font-size:12.5px">Dernier e-mail le ${fmtDate(lastSend.date)} (${lastSend.kind==='relance-auto'?'relance automatique':lastSend.kind==='relance'?'relance':'envoi'})</span>`:''}${(ri=>!ri?'':ri.done?`<span class="muted" style="font-size:12.5px">Relance envoyée le ${fmtDate(ri.done)}.</span>`:ri.noEmail?`<span class="muted" style="font-size:12.5px">Pas de relance automatique : ce client n'a pas d'adresse e-mail.</span>`:ri.expires||ri.past?'':`<span class="muted" style="font-size:12.5px">Sans réponse, relance automatique le ${fmtDate(ri.due)}.</span>`)(relanceInfo(d))}`;
   return `<div class="panel"><h3>Actions</h3>${info}${main}<button class="btn" data-act="pdf">${ICON.dl} Télécharger le PDF</button><button class="btn ghost" data-act="dup">Dupliquer en nouveau brouillon</button>${S.dl?'':`<span class="hint muted" style="font-size:12.5px">Le téléchargement n'est pas disponible dans cette vue.</span>`}</div>
   ${HOSTED&&window.GPF.sumup&&d.type==='facture'&&(st==='emise'||st==='retard')?`<div class="panel"><h3>Paiement par carte</h3>${d.payToken?`<span class="muted" style="font-size:13px">Lien automatique, au bon montant. La facture passera en « Payée » toute seule après le paiement.</span><input type="text" readonly id="ro-paylink" value="${esc(d.lienPaiement)}"><button class="btn sm" data-act="copylink">Copier le lien</button>`:`<button class="btn sm" data-act="mklink">Créer le lien de paiement</button>`}</div>`
    :d.type==='facture'&&(st==='emise'||st==='retard')?`<div class="panel"><h3>Paiement par carte</h3><div class="field"><label for="ro-lien">Lien de paiement SumUp</label><input type="url" id="ro-lien" value="${esc(d.lienPaiement)}" placeholder="https://pay.sumup.com/…"></div><button class="btn sm" data-act="lien">Enregistrer le lien</button><span class="muted" style="font-size:12.5px">Crée le lien dans l'appli SumUp, colle-le ici, puis télécharge à nouveau le PDF.</span></div>`:''}
@@ -1555,10 +1557,21 @@ Vous la trouverez à nouveau en pièce jointe. Merci de procéder à son règlem
 
 Si le paiement a déjà été effectué, merci de ne pas tenir compte de ce message.
 
+{signature}`},
+  relanceDevis:{sujet:'Votre devis {numero} – {objet}',corps:`{bonjour}
+
+Nous revenons vers vous au sujet de notre devis n° {numero}{session}, d'un montant de {montant} TTC, que nous vous avons envoyé le {date_envoi}.
+
+Avez-vous pu en prendre connaissance ? Nous restons à votre disposition pour toute question ou pour l'adapter à vos besoins.
+
+{lien_devis}
+
+Le devis est valable jusqu'au {validite}.
+
 {signature}`}
 };
-const MAIL_VARS=[['bonjour','Bonjour + prénom (ou contact pour un pro)'],['client','Nom du client'],['numero','Numéro du document'],['objet','Objet'],['montant','Total TTC'],['date','Date du document'],['session','« pour la session du … à … » si renseignée'],['validite','Fin de validité du devis'],['echeance',"Date d'échéance"],['acompte',"Phrase sur l'acompte demandé"],['lien_devis','Lien pour accepter le devis en ligne'],['paiement','Lien de paiement et IBAN'],['type_doc','Facture ou Facture d’acompte'],['la_facture','la facture / la facture d’acompte'],['signature','Cordialement + ton nom, téléphone, e-mail']];
-function mailKind(d,kind){return kind==='relance'?'relance':d.type==='devis'?'devis':d.type==='facture'?'facture':null;}
+const MAIL_VARS=[['bonjour','Bonjour + prénom (ou contact pour un pro)'],['date_envoi',"Date d'envoi du devis"],['client','Nom du client'],['numero','Numéro du document'],['objet','Objet'],['montant','Total TTC'],['date','Date du document'],['session','« pour la session du … à … » si renseignée'],['validite','Fin de validité du devis'],['echeance',"Date d'échéance"],['acompte',"Phrase sur l'acompte demandé"],['lien_devis','Lien pour accepter le devis en ligne'],['paiement','Lien de paiement et IBAN'],['type_doc','Facture ou Facture d’acompte'],['la_facture','la facture / la facture d’acompte'],['signature','Cordialement + ton nom, téléphone, e-mail']];
+function mailKind(d,kind){return kind==='relance'?(d.type==='devis'?'relanceDevis':'relance'):d.type==='devis'?'devis':d.type==='facture'?'facture':null;}
 function mailTpl(k){const s=S.settings;const def=MAIL_DEFAULTS[k];return {sujet:(s.mailTpl&&s.mailTpl[k]&&s.mailTpl[k].sujet)||def.sujet,corps:(s.mailTpl&&s.mailTpl[k]&&s.mailTpl[k].corps)||def.corps,perso:!!(s.mailTpl&&s.mailTpl[k])};}
 function mailVars(d){
   const s=S.settings;const c=d.client||snapshotClient(clientById(d.clientId))||{};const t=totals(d);const a=acompteDemande(d);
@@ -1568,6 +1581,7 @@ function mailVars(d){
     acompte:a?`Un acompte de ${fmtNum(a.pct,0)} %, soit ${eur(a.mt)} TTC, est à verser à la réservation.`:'',
     paiement:[d.lienPaiement?`Pour payer par carte bancaire, cliquez sur ce lien :\n${d.lienPaiement}`:'',virLines(d).length?`${d.lienPaiement?'Ou par virement':'Pour payer par virement'} :\n${virLines(d).join('\n')}`:''].filter(Boolean).join('\n\n'),
     type_doc:d.acompteDe?"Facture d'acompte":'Facture',la_facture:d.acompteDe?"la facture d'acompte":'la facture',
+    date_envoi:fmtDate(((d.envois||[]).find(x=>!/relance/.test(x.kind||''))||{}).date||d.date),
     signature:['Cordialement,',s.nom,s.tel,s.email].filter(Boolean).join('\n')};
 }
 function fillTpl(str,v){return String(str).replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m).replace(/ – (?=\n|$)/g,'').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();}
@@ -1586,7 +1600,23 @@ function mailTemplate(d,kind){
     body=sig>0?body.slice(0,sig).trimEnd()+'\n\n'+block+'\n\n'+body.slice(sig):body+'\n\n'+block;}
   return {subject:fillTpl(tp.sujet,v),body};
 }
-const MAIL_LBL={devis:"Envoi d'un devis",facture:"Envoi d'une facture",relance:"Relance d'une facture impayée"};
+const MAIL_LBL={devis:"Envoi d'un devis",facture:"Envoi d'une facture",relance:"Relance d'une facture impayée",relanceDevis:"Relance d'un devis sans réponse"};
+const relanceDays=()=>Math.min(60,Math.max(1,+S.settings.relanceDevisJours||7));
+const relanceOn=()=>S.settings.relanceDevisAuto!==false;
+/* date of the automatic follow-up of a sent quote, or null */
+function relanceInfo(d){
+  if(d.type!=='devis'||d.test)return null;
+  const rl=(d.envois||[]).filter(x=>/relance/.test(x.kind||''));
+  if(d.relanceAuto||rl.length)return {done:d.relanceAuto||rl.slice(-1)[0].date};
+  if(d.statut!=='envoye'||!relanceOn())return null;
+  const email=(d.client&&d.client.email)||(clientById(d.clientId)||{}).email;
+  if(!email)return {noEmail:true};
+  const sends=(d.envois||[]).filter(x=>!/relance/.test(x.kind||''));const last=(sends.slice(-1)[0]||{}).date;if(!last)return null;
+  const due=addDays(last,relanceDays());
+  if(d.validite&&d.validite<due)return {expires:true};
+  if(d.evtDate&&d.evtDate<due)return {past:true};
+  return {due:due<today()?today():due};
+}
 function tplEditor(k,after){
   const tp=mailTpl(k);
   openModal(`<div class="panel-h"><h2>Modèle : ${MAIL_LBL[k]}</h2><button class="btn ghost sm" data-a="close" aria-label="Fermer">${ICON.x}</button></div>

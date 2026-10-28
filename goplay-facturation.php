@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.6.2
+ * Version: 1.7.0
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.6.2');
+define('GPF_VERSION', '1.7.0');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -244,7 +244,16 @@ add_action('rest_api_init', function () {
             $data = $req->get_json_params();
             if (!is_array($data)) return new WP_Error('bad', 'Données invalides', ['status' => 400]);
             unset($data['id']);
-            if ($c === 'docs') { $err = gpf_check_doc_write($id, $data); if ($err) return $err; }
+            if ($c === 'docs') {
+                $err = gpf_check_doc_write($id, $data); if ($err) return $err;
+                /* keep what the server added meanwhile (automatic follow-up), even if the app sends an older copy */
+                $old = gpf_get('docs', $id);
+                if (is_array($old) && !empty($old['relanceAuto']) && empty($data['relanceAuto'])) {
+                    $data['relanceAuto'] = $old['relanceAuto'];
+                    $have = array_map('wp_json_encode', (array)($data['envois'] ?? []));
+                    foreach ((array)($old['envois'] ?? []) as $e) if (($e['kind'] ?? '') === 'relance-auto' && !in_array(wp_json_encode($e), $have, true)) $data['envois'][] = $e;
+                }
+            }
             gpf_put($c, $id, $data);
             return rest_ensure_response(['ok' => true]);
         }],
@@ -408,7 +417,7 @@ function gpf_too_many() {
 /* Issued documents are locked: only follow-up fields may change.        */
 function gpf_check_doc_write($id, $new) {
     $old = gpf_get('docs', $id);
-    $allowed = ['statut', 'paiement', 'envois', 'factureId', 'factureNumero', 'avoirNumero', 'payToken', 'lienPaiement', 'sumupCheckouts', 'signToken', 'lienDevis', 'acceptation', 'annulation', 'acompteCheckouts', 'acompteEnLigne', 'updatedAt'];
+    $allowed = ['statut', 'paiement', 'envois', 'factureId', 'factureNumero', 'avoirNumero', 'payToken', 'lienPaiement', 'sumupCheckouts', 'signToken', 'lienDevis', 'acceptation', 'annulation', 'acompteCheckouts', 'acompteEnLigne', 'relanceAuto', 'updatedAt'];
     if (is_array($old) && !empty($old['numero']) && empty($old['test'])) {
         $a = array_diff_key($old, array_flip($allowed));
         $b = array_diff_key($new, array_flip($allowed));
@@ -907,6 +916,77 @@ add_action('admin_post_gpf_backup_dl', function () {
     header('Content-Length: ' . filesize($path));
     readfile($path); exit;
 });
+
+/* ------------------------------------------------------------------ */
+/*  Automatic follow-up of quotes left without an answer               */
+/* ------------------------------------------------------------------ */
+define('GPF_TPL_RELANCE_DEVIS', ['sujet' => 'Votre devis {numero} – {objet}', 'corps' => "{bonjour}\n\nNous revenons vers vous au sujet de notre devis n° {numero}{session}, d'un montant de {montant} TTC, que nous vous avons envoyé le {date_envoi}.\n\nAvez-vous pu en prendre connaissance ? Nous restons à votre disposition pour toute question ou pour l'adapter à vos besoins.\n\n{lien_devis}\n\nLe devis est valable jusqu'au {validite}.\n\n{signature}"]);
+function gpf_fill_tpl($str, $v) {
+    $o = preg_replace_callback('/\{(\w+)\}/', function ($m) use ($v) { return array_key_exists($m[1], $v) ? $v[$m[1]] : $m[0]; }, (string)$str);
+    $o = preg_replace('/ – (?=\n|$)/', '', $o);
+    $o = preg_replace('/[ \t]+\n/', "\n", $o);
+    $o = preg_replace('/\n{3,}/', "\n\n", $o);
+    return trim($o);
+}
+function gpf_eur_fr($n) { return number_format((float)$n, 2, ',', ' ') . ' €'; }
+/* Returns the reason a quote is not followed up, or '' when the follow-up is due today. */
+function gpf_quote_followup_due($d, $s, $today) {
+    if (!is_array($d) || ($d['type'] ?? '') !== 'devis' || !empty($d['test']) || ($d['statut'] ?? '') !== 'envoye') return 'statut';
+    if (!empty($d['relanceAuto'])) return 'deja';
+    $sends = []; foreach ((array)($d['envois'] ?? []) as $e) { if (strpos((string)($e['kind'] ?? ''), 'relance') !== false) return 'deja'; if (!empty($e['date'])) $sends[] = substr($e['date'], 0, 10); }
+    if (!$sends) return 'jamais-envoye';
+    $days = max(1, min(60, (int)($s['relanceDevisJours'] ?? 7)));
+    $due = (new DateTime(max($sends) . ' 12:00:00', new DateTimeZone(GPF_TZ)))->modify("+$days days")->format('Y-m-d');
+    if ($due > $today) return 'pas-encore';
+    if (!empty($d['validite']) && $d['validite'] < $today) return 'expire';
+    if (!empty($d['evtDate']) && $d['evtDate'] < $today) return 'session-passee';
+    $to = $d['client']['email'] ?? '';
+    if (!is_email($to)) return 'sans-email';
+    return '';
+}
+function gpf_quote_followups() {
+    $s = gpf_settings();
+    if (isset($s['relanceDevisAuto']) && ($s['relanceDevisAuto'] === false || $s['relanceDevisAuto'] === 'false')) return 0;
+    $today = gpf_today(); $sent = 0;
+    $tpl = (!empty($s['mailTpl']['relanceDevis']['corps'])) ? $s['mailTpl']['relanceDevis'] : GPF_TPL_RELANCE_DEVIS;
+    if (empty($tpl['sujet'])) $tpl['sujet'] = GPF_TPL_RELANCE_DEVIS['sujet'];
+    $sumup = gpf_opt('sumup_key') !== '' && gpf_opt('sumup_merchant') !== '';
+    foreach (gpf_all('docs') as $r) {
+        $d = json_decode($r['data'], true);
+        if (gpf_quote_followup_due($d, $s, $today) !== '') continue;
+        $snap = !empty($d['entreprise']) ? $d['entreprise'] : $s;
+        $c = $d['client'];
+        $first = ''; foreach ((array)($d['envois'] ?? []) as $e) { if (!empty($e['date'])) { $first = substr($e['date'], 0, 10); break; } }
+        $nom = trim((string)($c['nom'] ?? ''));
+        $v = [
+            'bonjour' => ($c['type'] ?? '') === 'pro' ? 'Bonjour' . (!empty($c['contact']) ? ' ' . $c['contact'] : '') . ',' : 'Bonjour' . ($nom !== '' ? ' ' . explode(' ', $nom)[0] : '') . ',',
+            'client' => $nom, 'numero' => $d['numero'] ?? '', 'objet' => $d['objet'] ?? '',
+            'montant' => gpf_eur_fr(gpf_totals($d, $snap)['ttc']), 'date' => gpf_fmt_date($d['date'] ?? ''),
+            'date_envoi' => gpf_fmt_date($first ?: ($d['date'] ?? '')), 'validite' => gpf_fmt_date($d['validite'] ?? ''), 'echeance' => '',
+            'session' => !empty($d['evtDate']) ? ' pour la session du ' . gpf_fmt_date($d['evtDate']) . (!empty($d['evtHeure']) ? ' à ' . str_replace(':', 'h', $d['evtHeure']) : '') : '',
+            'lien_devis' => !empty($d['lienDevis']) ? ((!empty($d['acompteDemande']) && $sumup) ? "Pour accepter le devis et régler l'acompte en ligne" : 'Pour accepter le devis en ligne') . ", cliquez sur ce lien :\n" . $d['lienDevis'] : '',
+            'acompte' => '', 'paiement' => '', 'type_doc' => 'Devis', 'la_facture' => 'le devis',
+            'signature' => implode("\n", array_filter(['Cordialement,', $s['nom'] ?? '', $s['tel'] ?? '', $s['email'] ?? ''])),
+        ];
+        $dep = gpf_deposit_amount($d, $snap);
+        if ($dep > 0) $v['acompte'] = 'Un acompte de ' . rtrim(rtrim(number_format((float)($d['acomptePct'] ?? 30), 2, ',', ''), '0'), ',') . ' %, soit ' . gpf_eur_fr($dep) . ' TTC, est à verser à la réservation.';
+        $body = gpf_fill_tpl($tpl['corps'], $v);
+        if (!empty($d['lienDevis']) && strpos($body, $d['lienDevis']) === false) $body .= "\n\n" . $v['lien_devis'];
+        $subject = gpf_fill_tpl($tpl['sujet'], $v);
+        $headers = gpf_mail_headers();
+        $copy = gpf_opt('copy_to', '');
+        if ($copy && is_email($copy) && $copy !== $c['email']) $headers[] = 'Bcc: ' . $copy;
+        if (!wp_mail($c['email'], $subject, $body, $headers)) continue;
+        $fresh = gpf_get('docs', $r['id']);
+        if (!is_array($fresh) || gpf_quote_followup_due($fresh, $s, $today) !== '') continue;
+        $fresh['envois'] = array_merge((array)($fresh['envois'] ?? []), [['date' => $today, 'kind' => 'relance-auto', 'to' => $c['email']]]);
+        $fresh['relanceAuto'] = $today;
+        gpf_put('docs', $r['id'], $fresh);
+        $sent++;
+    }
+    return $sent;
+}
+add_action('gpf_daily', 'gpf_quote_followups', 20);
 
 /* ------------------------------------------------------------------ */
 /*  Daily summary of overdue invoices                                  */
