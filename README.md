@@ -6,6 +6,6 @@ L'outil s'ouvre sur `/facturation` du site et n'est accessible qu'aux administra
 
 ## Mises à jour
 
-Chaque version est publiée comme *release* GitHub avec deux fichiers : `goplay-facturation.zip` et `update.json`. L'extension installée lit `update.json` de la dernière release et se met à jour toute seule.
+Chaque version est déposée dans `dist/` et annoncée dans `update.json`. L'extension installée lit `update.json` et se met à jour toute seule.
 
 Polices : Liberation Sans (SIL Open Font License 1.1, voir `app/fonts/OFL.txt`). Bibliothèque pdf-lib (MIT, voir `app/lib/pdf-lib-LICENSE.md`).
