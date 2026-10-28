@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.6.0
+ * Version: 1.6.1
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,8 +11,8 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.6.0');
-define('GPF_UPDATE_JSON', 'https://github.com/fabricelau/goplay-facturation/releases/latest/download/update.json');
+define('GPF_VERSION', '1.6.1');
+define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
 define('GPF_TZ', 'Indian/Reunion');
@@ -292,7 +292,7 @@ function gpf_update_info($force = false) {
     if (!is_wp_error($r) && (int)wp_remote_retrieve_response_code($r) === 200) {
         $j = json_decode(wp_remote_retrieve_body($r), true);
         if (is_array($j) && !empty($j['version']) && preg_match('/^\d+\.\d+\.\d+$/', $j['version'])
-            && !empty($j['package']) && strpos($j['package'], 'https://github.com/fabricelau/goplay-facturation/') === 0) {
+            && !empty($j['package']) && (strpos($j['package'], 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/') === 0 || strpos($j['package'], 'https://github.com/fabricelau/goplay-facturation/') === 0)) {
             $info = ['checked' => time(), 'ok' => true, 'version' => $j['version'], 'package' => $j['package'],
                 'changelog' => (string)($j['changelog'] ?? ''), 'requires_php' => (string)($j['requires_php'] ?? '7.4'), 'tested' => (string)($j['tested'] ?? '')];
         }
