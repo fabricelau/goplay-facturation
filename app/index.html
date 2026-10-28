@@ -708,8 +708,8 @@ function vParams(){
   </div></div>
   <div class="panel"><div class="sec-title">Modèles d'e-mails</div><div class="body" style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px">
     <span class="muted" style="font-size:14px">Le texte préparé quand tu cliques sur « Envoyer par e-mail » ou « Envoyer une relance ».</span>
-    <div class="row" style="flex-wrap:wrap;gap:8px"><label for="p-relanceDevisAuto" style="font-weight:600">Relance automatique des devis sans réponse</label><select id="p-relanceDevisAuto" data-p="relanceDevisAuto" style="width:auto"><option value="true" ${relanceOn()?'selected':''}>Oui</option><option value="false" ${!relanceOn()?'selected':''}>Non</option></select><span>après</span><input type="number" id="p-relanceDevisJours" data-p="relanceDevisJours" min="1" max="60" value="${relanceDays()}" style="width:70px"><span>jours</span></div>
-    <span class="muted" style="font-size:13px">Un seul e-mail de relance, envoyé par le site le matin, si le devis est toujours « Envoyé » (ni accepté, ni refusé), encore valable et que le client a une adresse e-mail. Tu reçois une copie. Pense à cliquer sur Enregistrer en haut.</span>
+    ${HOSTED?`<div class="row" style="flex-wrap:wrap;gap:8px"><label for="p-relanceDevisAuto" style="font-weight:600">Relance automatique des devis sans réponse</label><select id="p-relanceDevisAuto" data-p="relanceDevisAuto" style="width:auto"><option value="true" ${relanceOn()?'selected':''}>Oui</option><option value="false" ${!relanceOn()?'selected':''}>Non</option></select><span>après</span><input type="number" id="p-relanceDevisJours" data-p="relanceDevisJours" min="1" max="60" value="${relanceDays()}" style="width:70px"><span>jours</span></div>
+    <span class="muted" style="font-size:13px">Un seul e-mail de relance, envoyé par le site le matin, si le devis est toujours « Envoyé » (ni accepté, ni refusé), encore valable et que le client a une adresse e-mail. Tu reçois une copie. Pense à cliquer sur Enregistrer en haut.</span>`:''}
     ${['devis','facture','relance','relanceDevis'].map(k=>`<div class="row" style="justify-content:space-between"><span>${MAIL_LBL[k]} ${mailTpl(k).perso?'<span class="pill p-acc">Personnalisé</span>':'<span class="pill p-draft">Texte d\'origine</span>'}</span><button class="btn sm" data-tpl="${k}">Modifier</button></div>`).join('')}
   </div></div>
   <div class="panel"><div class="panel-h"><h2>Export pour ton comptable</h2><button class="btn" id="export-csv">${ICON.dl} Toutes les factures (CSV)</button></div>
@@ -1602,7 +1602,7 @@ function mailTemplate(d,kind){
 }
 const MAIL_LBL={devis:"Envoi d'un devis",facture:"Envoi d'une facture",relance:"Relance d'une facture impayée",relanceDevis:"Relance d'un devis sans réponse"};
 const relanceDays=()=>Math.min(60,Math.max(1,+S.settings.relanceDevisJours||7));
-const relanceOn=()=>S.settings.relanceDevisAuto!==false;
+const relanceOn=()=>HOSTED&&S.settings.relanceDevisAuto!==false;
 /* date of the automatic follow-up of a sent quote, or null */
 function relanceInfo(d){
   if(d.type!=='devis'||d.test)return null;
