@@ -1,0 +1,7 @@
+{
+  "version": "1.6.1",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.6.1.zip",
+  "requires_php": "7.4",
+  "tested": "7.1",
+  "changelog": "Factur-X : factures et avoirs émis au format PDF/A-3 avec les données EN 16931.\nMises à jour automatiques depuis GitHub.\nEn-tête des documents allégé, mentions légales en bas de page."
+}
