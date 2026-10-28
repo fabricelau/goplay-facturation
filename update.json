@@ -1,7 +1,7 @@
 {
-  "version": "1.6.1",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.6.1.zip",
+  "version": "1.6.2",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.6.2.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Factur-X : factures et avoirs émis au format PDF/A-3 avec les données EN 16931.\nMises à jour automatiques depuis GitHub.\nEn-tête des documents allégé, mentions légales en bas de page."
+  "changelog": "Conformité : la remise à zéro ne supprime jamais un document émis (conservation 10 ans).\nNumérotation des factures et avoirs continue, sans trou.\nOrdre chronologique vérifié pour les avoirs, rappel de la date de prestation."
 }

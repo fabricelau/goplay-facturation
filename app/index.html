@@ -459,10 +459,12 @@ function importBackup(file){
   r.readAsText(file);
 }
 function resetAll(){
-  const all=S.allDocs||S.docs;
-  if(!all.length){toast('Il n\'y a aucun devis ni facture à supprimer');return;}
+  const every=S.allDocs||S.docs;
+  /* issued real documents are kept: invoices must be kept 10 years and numbered without gaps */
+  const kept=every.filter(d=>d.numero&&!d.test);const all=every.filter(d=>!(d.numero&&!d.test));
+  if(!all.length){toast(kept.length?'Tes documents émis sont conservés (obligation légale) : il n\'y a rien d\'autre à supprimer':'Il n\'y a aucun devis ni facture à supprimer');return;}
   openModal(`<div class="panel-h"><h2>Tout supprimer ?</h2></div><div class="body">
-    <p style="margin:0">Les <b>${all.length}</b> devis, factures et avoirs seront définitivement supprimés. Cette action ne peut pas être annulée.</p>
+    <p style="margin:0">Les <b>${all.length}</b> documents de test et brouillons seront définitivement supprimés. Cette action ne peut pas être annulée.</p>${kept.length?`<p style="margin:0">Tes <b>${kept.length}</b> devis, factures et avoirs émis sont conservés : la loi impose de garder les factures 10 ans, sans trou dans la numérotation.</p>`:''}
     <div class="field"><label for="rz-conf">Pour confirmer, tape <b>SUPPRIMER</b></label><input type="text" id="rz-conf" autocomplete="off"></div></div>
     <div class="foot"><button class="btn" data-a="no">Annuler</button><button class="btn danger" data-a="ok">Tout supprimer</button></div>`,dl=>{
     dl.addEventListener('click',async e=>{const b=e.target.closest('[data-a]');if(!b)return;if(b.dataset.a==='no'){closeModal();return;}
@@ -482,9 +484,12 @@ function syncEditor(){
   if(f&&JSON.stringify(strip(f))!==JSON.stringify(strip(S.edit))){S.edit=JSON.parse(JSON.stringify(f));if($('#modal').hidden)renderEditor();else updatePreview();}
 }
 function applyMode(){if(S.allDocs)S.docs=S.allDocs.filter(d=>!!d.test===!!S.settings.modeTest);}
+const realIssued=type=>(S.allDocs||S.docs).filter(d=>d.type===type&&d.seq&&!d.test);
 function nextSeq(type){
   const start=S.settings.modeTest?1:+S.settings[{devis:'debutDevis',facture:'debutFacture',avoir:'debutAvoir'}[type]]||1;
   const max=Math.max(0,...S.docs.filter(d=>d.type===type&&d.seq).map(d=>+d.seq));
+  /* invoices and credit notes must follow each other without gaps: once one is issued, the start number no longer applies */
+  if(!S.settings.modeTest&&type!=='devis'&&max>0)return max+1;
   return Math.max(start,max+1);
 }
 function makeNumero(type,seq,date){
@@ -512,9 +517,9 @@ function validateForEmit(d){
   if(c&&(!c.adresse||!c.ville))e.push("L'adresse du client");
   const ls=(d.lignes||[]).filter(l=>l.designation&&(+l.qte));
   if(!ls.length)e.push("Au moins une ligne avec une désignation et une quantité");
-  if(d.type==='facture'){
-    const last=S.docs.filter(x=>x.type==='facture'&&x.seq).sort((a,b)=>b.seq-a.seq)[0];
-    if(last&&d.date<last.date)e.push(`Une date au moins égale à celle de la dernière facture (${fmtDate(last.date)}), pour garder l'ordre chronologique`);
+  if(d.type==='facture'||d.type==='avoir'){
+    const last=S.docs.filter(x=>x.type===d.type&&x.seq).sort((a,b)=>b.seq-a.seq)[0];
+    if(last&&d.date<last.date)e.push(`Une date au moins égale à celle ${d.type==='avoir'?"du dernier avoir":'de la dernière facture'} (${fmtDate(last.date)}), pour garder l'ordre chronologique`);
   }
   return e;
 }
@@ -666,7 +671,7 @@ function vParams(){
     <div class="field full"><label for="p-saisiePrix">Je saisis mes prix</label><select id="p-saisiePrix" data-p="saisiePrix"><option value="ttc" ${s.saisiePrix==='ttc'?'selected':''}>TTC (TVA comprise) — l'outil calcule le HT et la TVA</option><option value="ht" ${s.saisiePrix!=='ttc'?'selected':''}>HT (hors taxes) — l'outil ajoute la TVA</option></select><span class="hint">Les documents affichent toujours le détail HT, TVA et TTC, comme l'exige la loi. Le total TTC correspond exactement à tes prix.</span></div>
   </div></div>
   <div class="panel"><div class="sec-title">Numérotation</div><div class="form">
-    <div class="field full"><span class="hint">Indique ici le prochain numéro à utiliser. Tu peux le changer à tout moment, mais seulement vers un numéro plus grand que ta dernière facture émise : l'outil ne réutilise jamais un numéro déjà attribué. Les documents du mode test ont leur propre numérotation et ne comptent pas.</span></div>
+    <div class="field full"><span class="hint">Indique ici le numéro de départ. Dès ta première vraie facture (ou ton premier avoir), la suite se fait toute seule, sans trou : la loi impose une numérotation continue. Pour les devis, tu peux le changer quand tu veux. Les documents du mode test ont leur propre numérotation et ne comptent pas.</span></div>
     ${f('prefixeFacture','Préfixe des factures')}${f('debutFacture','Prochain n° de facture','number')}
     ${f('prefixeDevis','Préfixe des devis')}${f('debutDevis','Prochain n° de devis','number')}
     ${f('prefixeAvoir','Préfixe des avoirs')}${f('debutAvoir','Prochain n° d\'avoir','number')}
@@ -699,7 +704,7 @@ function vParams(){
   <div class="panel" style="border-color:var(--danger)"><div class="sec-title" style="color:var(--danger)">Remise à zéro</div><div class="body" style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px">
     <span class="muted" style="font-size:14px">Supprime tous les devis, factures et avoirs (vrais et de test) pour repartir de zéro, par exemple avant de commencer à facturer pour de vrai. Tes réglages, clients, catalogue et formules sont conservés. La numérotation repart des numéros indiqués plus haut.</span>
     <span class="muted" style="font-size:14px"><b>À utiliser seulement avant de facturer pour de vrai</b> : une fois des factures envoyées à des clients, la loi interdit de les supprimer.</span>
-    <div class="row"><button class="btn danger" id="reset-all">Supprimer tous les devis et factures (${(S.allDocs||S.docs).length})</button></div>
+    <div class="row"><button class="btn danger" id="reset-all">Supprimer les tests et brouillons (${(S.allDocs||S.docs).filter(d=>!(d.numero&&!d.test)).length})</button></div>
   </div></div>
   <div class="panel"><div class="sec-title">Modèles d'e-mails</div><div class="body" style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:8px">
     <span class="muted" style="font-size:14px">Le texte préparé quand tu cliques sur « Envoyer par e-mail » ou « Envoyer une relance ».</span>
@@ -742,6 +747,7 @@ function bindView(v){
       if(!await confirmBox(`Supprimer ${t.length} document${t.length>1?'s':''} de test ?`,'Seuls les documents marqués TEST sont supprimés. Tes vrais devis et factures ne sont pas touchés.','Supprimer',true))return;
       try{for(const d of t)await remove('docs',d.id);toast('Documents de test supprimés');}catch(e){toast('Certains documents n\'ont pas pu être supprimés. Réessaie.');}});
     $('#reset-all',v).addEventListener('click',resetAll);
+    [['facture','debutFacture'],['avoir','debutAvoir']].forEach(([t,k])=>{const i=$('#p-'+k,v);if(i&&realIssued(t).length){i.disabled=true;i.title='Numérotation continue : le prochain numéro suit automatiquement le dernier émis.';i.value=Math.max(0,...realIssued(t).map(d=>+d.seq))+1;}});
     const ht=$('#hide-test',v);ht.addEventListener('change',()=>safe(()=>putSettings({...S.settings,cacherTest:ht.checked}),ht.checked?'Bouton du mode test caché':'Bouton du mode test affiché'));
     $$('[data-tpl]',v).forEach(b=>b.addEventListener('click',()=>tplEditor(b.dataset.tpl)));
     $('#export-zip',v).addEventListener('click',()=>exportZip($('#zip-month',v).value));
@@ -920,7 +926,8 @@ async function emit(){
     :`${d.type==='facture'?'La facture':"L'avoir"} recevra le numéro <b class="num">${esc(numero)}</b>. Une fois émis, le document ne pourra plus être modifié ni supprimé : toute correction passera par un avoir.`;
   const cc=clientById(d.clientId);
   const warn=cc&&cc.type==='pro'&&d.type!=='devis'&&!cc.siren?`<br><br><span style="color:var(--c-orange)">Ce client professionnel n'a pas de SIREN. Ce n'est pas bloquant aujourd'hui, mais il deviendra obligatoire sur les factures entre professionnels en septembre 2027.</span>`:'';
-  if(!await confirmBox(`Émettre ${numero} ?`,msg+warn,'Émettre'))return;
+  const warn2=d.type==='facture'&&!d.acompteDe&&!d.evtDate?`<br><br><span style="color:var(--c-orange)">Aucune date de session n'est indiquée. Si la prestation a eu lieu (ou aura lieu) à une autre date que celle de la facture, la loi impose de l'indiquer : ajoute-la dans « Date de la session ».</span>`:'';
+  if(!await confirmBox(`Émettre ${numero} ?`,msg+warn+warn2,'Émettre'))return;
   cleanLines(d);
   if(HOSTED&&window.GPF.quoteBase&&d.type==='devis'&&!d.signToken){d.signToken=payToken();d.lienDevis=window.GPF.quoteBase+d.signToken+'/';}
   if(HOSTED&&window.GPF.sumup&&d.type==='facture'&&!d.payToken){d.payToken=payToken();d.lienPaiement=window.GPF.payBase+d.payToken+'/';}

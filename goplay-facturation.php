@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.6.1
+ * Version: 1.6.2
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.6.1');
+define('GPF_VERSION', '1.6.2');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -266,8 +266,14 @@ add_action('rest_api_init', function () {
         global $wpdb;
         $b = $req->get_json_params();
         if (!is_array($b) || ($b['confirm'] ?? '') !== 'SUPPRIMER') return new WP_Error('bad', 'Confirmation manquante', ['status' => 400]);
-        $n = $wpdb->delete(gpf_table(), ['coll' => 'docs'], ['%s']);
-        return rest_ensure_response(['ok' => true, 'deleted' => (int)$n]);
+        /* Real issued documents are never deleted (10-year retention, gapless numbering): only tests and drafts go. */
+        $n = 0; $kept = 0;
+        foreach (gpf_all('docs') as $r) {
+            $d = is_array($r['data']) ? $r['data'] : json_decode((string)$r['data'], true);
+            if (is_array($d) && !empty($d['numero']) && empty($d['test'])) { $kept++; continue; }
+            $n += (int)$wpdb->delete(gpf_table(), ['coll' => 'docs', 'id' => $r['id']], ['%s', '%s']);
+        }
+        return rest_ensure_response(['ok' => true, 'deleted' => $n, 'kept' => $kept]);
     }]);
     register_rest_route('gpf/v1', '/entreprises', ['methods' => 'GET', 'permission_callback' => 'gpf_admin', 'callback' => 'gpf_rest_companies']);
     register_rest_route('gpf/v1', '/mail', ['methods' => 'POST', 'permission_callback' => 'gpf_admin', 'callback' => 'gpf_rest_mail']);
