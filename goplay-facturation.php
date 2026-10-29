@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.7.0
+ * Version: 1.8.0
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.7.0');
+define('GPF_VERSION', '1.8.0');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -571,7 +571,7 @@ function gpf_render_pay($token) {
     if (!$d || ($d['type'] ?? '') !== 'facture' || empty($d['numero'])) { status_header(404); gpf_pay_page('Lien introuvable', '<h1>Lien introuvable</h1><p class="muted">Ce lien de paiement n\'existe pas ou n\'est plus valable. Contactez-nous pour régler votre facture.</p>'); return; }
     $s = gpf_settings();
     $t = gpf_totals($d, $s);
-    $label = !empty($d['acompteDe']) ? "Facture d'acompte" : 'Facture';
+    $label = (!empty($d['acompteDe']) || !empty($d['acompteLibre'])) ? "Facture d'acompte" : 'Facture';
     $head = '<h1>' . esc_html($label . ' n° ' . $d['numero']) . '</h1><div class="muted">' . esc_html($d['client']['nom'] ?? '') . (!empty($d['objet']) ? ' · ' . esc_html($d['objet']) : '') . '</div>';
 
     // Return from SumUp: check stored checkouts
