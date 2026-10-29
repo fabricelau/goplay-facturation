@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.8.0
+ * Version: 1.8.1
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.8.0');
+define('GPF_VERSION', '1.8.1');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -300,6 +300,8 @@ add_action('rest_api_init', function () {
 /* Automatic updates from GitHub releases (no ZIP to upload anymore)  */
 /* ------------------------------------------------------------------ */
 function gpf_update_info($force = false) {
+    /* « Vérifier à nouveau » on Tableau de bord › Mises à jour also refreshes our own check */
+    if (is_admin() && !empty($_GET['force-check'])) $force = true;
     $c = get_site_transient('gpf_update_info');
     if (!$force && is_array($c)) return $c;
     $r = wp_remote_get(GPF_UPDATE_JSON, ['timeout' => 10, 'redirection' => 5, 'headers' => ['Accept' => 'application/json']]);
@@ -312,7 +314,7 @@ function gpf_update_info($force = false) {
                 'changelog' => (string)($j['changelog'] ?? ''), 'requires_php' => (string)($j['requires_php'] ?? '7.4'), 'tested' => (string)($j['tested'] ?? '')];
         }
     }
-    set_site_transient('gpf_update_info', $info, $info['ok'] ? 6 * HOUR_IN_SECONDS : HOUR_IN_SECONDS);
+    set_site_transient('gpf_update_info', $info, $info['ok'] ? 2 * HOUR_IN_SECONDS : HOUR_IN_SECONDS);
     return $info;
 }
 add_filter('pre_set_site_transient_update_plugins', function ($t) {
