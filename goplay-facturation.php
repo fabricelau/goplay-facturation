@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.9.0
+ * Version: 1.10.0
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.9.0');
+define('GPF_VERSION', '1.10.0');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -417,8 +417,35 @@ function gpf_too_many() {
 }
 
 /* Issued documents are locked: only follow-up fields may change.        */
-function gpf_check_doc_write($id, $new) {
+/* An issued invoice or credit note can be reopened for correction only while nothing has left. */
+function gpf_can_reopen($old, $id) {
+    if (!in_array($old['type'] ?? '', ['facture', 'avoir'], true) || !in_array($old['statut'] ?? '', ['emise', 'emis'], true)) return false;
+    if (!empty($old['paiement']) || !empty($old['envois'])) return false;
+    foreach (gpf_all('docs') as $r) {
+        if ($r['id'] === $id) continue;
+        $x = json_decode($r['data'], true);
+        if (!is_array($x)) continue;
+        if (($x['type'] ?? '') === 'avoir' && ($x['factureId'] ?? '') === $id) return false;
+        foreach ((array)($x['lignes'] ?? []) as $l) if (($l['acompteRef'] ?? '') === $id) return false;
+    }
+    return true;
+}
+function gpf_check_doc_write($id, &$new) {
     $old = gpf_get('docs', $id);
+    if (is_array($old) && !empty($old['numero']) && empty($old['test'])) {
+        foreach (['numero', 'seq', 'type'] as $k) if ((string)($old[$k] ?? '') !== (string)($new[$k] ?? '')) return new WP_Error('locked', 'Le numéro d\'un document émis ne peut pas changer.', ['status' => 409]);
+        /* the history of corrections is kept by the server, whatever the app sends */
+        $hist = (array)($old['corrections'] ?? []);
+        if (($old['statut'] ?? '') === 'brouillon') { if ($hist) $new['corrections'] = $hist; else unset($new['corrections']); return null; }
+        if (($new['statut'] ?? '') === 'brouillon') {
+            if (!gpf_can_reopen($old, $id)) return new WP_Error('locked', 'Cette facture a déjà été envoyée, payée ou utilisée : corrige-la avec un avoir.', ['status' => 409]);
+            $prev = $old; unset($prev['corrections']);
+            $hist[] = ['date' => gmdate('c'), 'user' => get_current_user_id(), 'avant' => $prev];
+            $new = $prev; $new['statut'] = 'brouillon'; $new['corrections'] = $hist;
+            return null;
+        }
+        if ($hist) $new['corrections'] = $hist; else unset($new['corrections']);
+    }
     $allowed = ['statut', 'paiement', 'envois', 'factureId', 'factureNumero', 'avoirNumero', 'payToken', 'lienPaiement', 'sumupCheckouts', 'signToken', 'lienDevis', 'acceptation', 'annulation', 'acompteCheckouts', 'acompteEnLigne', 'relanceAuto', 'updatedAt'];
     if (is_array($old) && !empty($old['numero']) && empty($old['test'])) {
         $a = array_diff_key($old, array_flip($allowed));

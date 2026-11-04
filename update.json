@@ -1,7 +1,7 @@
 {
-  "version": "1.9.0",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.9.0.zip",
+  "version": "1.10.0",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.10.0.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Clients publics (Chorus Pro) : pas de paiement par carte, SIRET, code service et n° d'engagement.\nBouton « Retirer le lien de paiement par carte ».\nNoms des PDF compatibles Chorus Pro."
+  "changelog": "« Corriger (pas encore envoyée) » : corrige une facture non envoyée en gardant son numéro et sa date, avec historique.\nClients publics Chorus Pro : virement seulement, SIRET, code service, n° d'engagement."
 }

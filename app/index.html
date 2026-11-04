@@ -447,7 +447,7 @@ const STAT={
   facture:{brouillon:['Brouillon','p-draft'],emise:['À encaisser','p-sent'],retard:['En retard','p-warn'],payee:['Payée','p-ok'],avoiree:['Annulée (avoir)','p-draft']},
   avoir:{brouillon:['Brouillon','p-draft'],emis:['Émis','p-acc']}
 };
-const pill=d=>{const [l,c]=(STAT[d.type]||{})[statusOf(d)]||['—','p-draft'];return `<span class="pill ${c}">${l}</span>`;};
+const pill=d=>{const [l,c]=inCorrection(d)?['En correction','p-warn']:(STAT[d.type]||{})[statusOf(d)]||['—','p-draft'];return `<span class="pill ${c}">${l}</span>`;};
 const TYPE_LBL={devis:'Devis',facture:'Facture',avoir:'Avoir'};
 async function exportBackup(){
   if(!S.dl){toast("Le téléchargement n'est pas disponible dans cette vue.");return;}
@@ -518,7 +518,15 @@ function soldeInfo(d){
 /* a deposit invoice: from a quote (acompteDe) or created directly (acompteLibre) */
 const isAc=d=>!!(d&&(d.acompteDe||d.acompteLibre));
 /* public-sector client invoiced through Chorus Pro: paid by bank transfer, never by card */
-const isChorus=d=>!!(d&&((d.client&&d.client.chorus)||(!d.numero&&(clientById(d.clientId)||{}).chorus)));
+const isChorus=d=>!!(d&&((d.client&&d.client.chorus)||((!d.numero||d.statut==='brouillon')&&(clientById(d.clientId)||{}).chorus)));
+/* an issued invoice or credit note can be reopened only while nothing has left: not sent, not paid, not used elsewhere */
+function canReopen(d){
+  if(!d||!d.numero||!['facture','avoir'].includes(d.type)||!['emise','emis'].includes(d.statut))return false;
+  if(d.paiement||(d.envois||[]).length)return false;
+  const all=S.allDocs||S.docs;
+  return !all.some(x=>x.id!==d.id&&((x.lignes||[]).some(l=>l.acompteRef===d.id)||(x.type==='avoir'&&x.factureId===d.id)));
+}
+const inCorrection=d=>!!(d&&d.numero&&d.statut==='brouillon');
 function newDoc(type,base={}){
   const d={id:uid(),type,statut:'brouillon',...(S.settings.modeTest?{test:true}:{}),saisie:S.settings.saisiePrix==='ttc'?'ttc':'ht',date:today(),clientId:'',client:null,objet:'',nature:'services',lignes:[],notes:'',lienPaiement:'',createdAt:new Date().toISOString(),...base};
   if(type==='devis')d.validite=d.validite||addDays(d.date,S.settings.validiteDevis||30);
@@ -537,7 +545,7 @@ function validateForEmit(d){
   if(c&&(!c.adresse||!c.ville))e.push("L'adresse du client");
   const ls=(d.lignes||[]).filter(l=>l.designation&&(+l.qte));
   if(!ls.length)e.push("Au moins une ligne avec une désignation et une quantité");
-  if(d.type==='facture'||d.type==='avoir'){
+  if((d.type==='facture'||d.type==='avoir')&&!d.seq){
     const last=S.docs.filter(x=>x.type===d.type&&x.seq).sort((a,b)=>b.seq-a.seq)[0];
     if(last&&d.date<last.date)e.push(`Une date au moins égale à celle ${d.type==='avoir'?"du dernier avoir":'de la dernière facture'} (${fmtDate(last.date)}), pour garder l'ordre chronologique`);
   }
@@ -799,7 +807,7 @@ function vParams(){
 function bindView(v){
   $$('[data-open]',v).forEach(b=>b.addEventListener('click',()=>{const d=S.docs.find(x=>x.id===b.dataset.open);d&&openEditor(JSON.parse(JSON.stringify(d)));}));
   $$('[data-deldrafts]',v).forEach(b=>b.addEventListener('click',async()=>{const w=b.dataset.deldrafts;const types=w==='devis'?['devis']:w==='avoirs'?['avoir']:['facture','avoir'];
-    const drafts=S.docs.filter(d=>types.includes(d.type)&&d.statut==='brouillon');if(!drafts.length)return;
+    const drafts=S.docs.filter(d=>types.includes(d.type)&&d.statut==='brouillon'&&!d.numero);if(!drafts.length)return;
     if(!await confirmBox(`Supprimer ${drafts.length} brouillon${drafts.length>1?'s':''} ?`,`Tous les ${w==='devis'?'devis':w==='avoirs'?'avoirs':'factures et avoirs'} en brouillon seront supprimés. Ils n'ont pas de numéro : ta numérotation n'est pas touchée. Les documents émis ne sont pas concernés.`,'Supprimer',true))return;
     try{for(const d of drafts)await deleteDraft(d);toast(`${drafts.length} brouillon${drafts.length>1?'s':''} supprimé${drafts.length>1?'s':''}`);}catch(e){console.error(e);toast('Certains brouillons n\'ont pas pu être supprimés. Réessaie.');}}));
   $$('[data-cview]',v).forEach(b=>b.addEventListener('click',()=>{S.clientView=b.dataset.cview;render();window.scrollTo(0,0);}));
@@ -905,7 +913,7 @@ function renderEditor(){
   const d=S.edit;const old=$('#editor');const ed=old.cloneNode(false);old.replaceWith(ed);const ro=locked(d);
   const tl=isAc(d)?"Facture d'acompte":TYPE_LBL[d.type];const title=d.numero?`${tl} ${d.numero}`:`${tl} — brouillon`;
   ed.innerHTML=`<div class="ed-bar"><div class="row"><button class="btn ghost" id="ed-close">${ICON.back} Retour</button><h2>${esc(title)} ${pill(d)}</h2></div>
-    <div class="row">${ro?'':`<button class="btn" id="ed-save">Enregistrer le brouillon</button><button class="btn primary" id="ed-emit">${d.type==='devis'?'Émettre le devis':d.type==='avoir'?"Émettre l'avoir":'Émettre la facture'}</button>`}</div></div>
+    <div class="row">${ro?'':`<button class="btn" id="ed-save">Enregistrer le brouillon</button><button class="btn primary" id="ed-emit">${inCorrection(d)?'Valider la correction':d.type==='devis'?'Émettre le devis':d.type==='avoir'?"Émettre l'avoir":'Émettre la facture'}</button>`}</div></div>
     <div class="ed-body ${ro?'ro':''}" data-tab="${S.edTab}">
       ${ro?'':`<div class="ed-tabs seg" style="grid-column:1/-1;justify-self:start"><button data-tab="form" class="${S.edTab==='form'?'on':''}">Saisie</button><button data-tab="preview" class="${S.edTab==='preview'?'on':''}">Aperçu</button></div>`}
       ${ro?`<div class="paper-wrap" style="position:static"><div class="paper long" id="paper"></div></div><div class="side-actions">${roActions(d)}</div>`
@@ -924,7 +932,7 @@ function formHtml(d){
     <div class="field full"><label for="e-client">Client</label><div class="row" style="flex-wrap:nowrap"><select id="e-client"><option value="">Choisir un client…</option>${cl.map(c=>`<option value="${c.id}" ${c.id===d.clientId?'selected':''}>${esc(c.nom)}</option>`).join('')}</select><button class="btn" id="e-newclient">+ Nouveau</button></div></div>
     <div class="field full"><label for="e-objet">Objet</label><input type="text" id="e-objet" data-f="objet" value="${esc(d.objet)}" placeholder="Ex. Rénovation salle de bain"></div>
     ${d.type!=='devis'&&isChorus(d)?`<div class="field"><label for="e-engagement">N° d'engagement / bon de commande</label><input type="text" id="e-engagement" data-f="engagement" value="${esc(d.engagement||'')}" placeholder="Si le client t'en a donné un"></div><div class="field"><label for="e-codeService">Code service Chorus</label><input type="text" id="e-codeService" data-f="codeService" value="${esc(d.codeService!=null?d.codeService:((clientById(d.clientId)||{}).codeService||''))}"></div><div class="field full"><span class="hint">Client public : facture à déposer sur Chorus Pro, payée par virement (pas de lien de paiement par carte).</span></div>`:''}
-    <div class="field"><label for="e-date">Date</label><input type="date" id="e-date" data-f="date" value="${esc(d.date)}"></div>
+    ${inCorrection(d)?`<div class="field full"><div class="panel" style="border-color:var(--c-orange);padding:10px 14px;font-size:13.5px"><b>Facture en correction.</b> Elle garde son numéro et sa date. Corrige ce qu'il faut, puis clique sur « Valider la correction ». L'ancienne version est conservée dans l'historique.</div></div>`:''}<div class="field"><label for="e-date">Date</label><input type="date" id="e-date" data-f="date" value="${esc(d.date)}" ${inCorrection(d)?'disabled title="La date d\'une facture corrigée ne change pas (ordre chronologique)"':''}></div>
     ${d.type==='devis'?`<div class="field"><label for="e-validite">Valable jusqu'au</label><input type="date" id="e-validite" data-f="validite" value="${esc(d.validite)}"></div>`:''}
     ${d.type==='facture'?`<div class="field"><label for="e-echeance">Échéance de paiement</label><input type="date" id="e-echeance" data-f="echeance" value="${esc(d.echeance)}"></div>`:''}
     ${d.type==='avoir'?`<div class="field"><label>Avoir sur la facture</label><div class="num" style="padding:8px 0">${esc(d.avoirDe||'—')}</div></div>`:''}
@@ -948,7 +956,7 @@ function formHtml(d){
       <div class="row" id="e-acRow" ${d.acompteDemande?'':'hidden'}><input type="number" min="1" max="100" step="1" id="e-acPct" value="${esc(d.acomptePct||30)}" style="width:90px" aria-label="Pourcentage d'acompte"><span>%</span><span class="muted num" id="e-acMt"></span></div></div>`:''}
     <div class="field full"><label for="e-notes">Notes pour le client</label><textarea id="e-notes" data-f="notes" placeholder="${d.type==='devis'?'Ex. Acompte de 30 % à la commande':'Ex. Merci pour votre confiance'}">${esc(d.notes)}</textarea></div>
   </div></div>
-  ${S.docs.some(x=>x.id===d.id)?`<div class="row"><button class="btn danger" id="e-del">Supprimer ce brouillon</button></div>`:''}`;
+  ${S.docs.some(x=>x.id===d.id)&&!d.numero?`<div class="row"><button class="btn danger" id="e-del">Supprimer ce brouillon</button></div>`:''}`;
 }
 function linesHtml(d){
   const fr=isFranchise();
@@ -1009,8 +1017,8 @@ async function saveDraft(){const d=S.edit;d.client=snapshotClient(clientById(d.c
 async function emit(){
   const d=S.edit;const errs=validateForEmit(d);
   if(errs.length){openModal(`<div class="panel-h"><h2>Il manque quelques informations</h2></div><div class="body"><div class="errs">Pour émettre ce document, ajoute :<ul>${errs.map(e=>`<li>${esc(e)}</li>`).join('')}</ul></div></div><div class="foot">${errs.some(e=>e.includes('Réglages'))?`<a class="btn" href="#parametres" data-a="go">Ouvrir les réglages</a>`:''}<button class="btn primary" data-a="ok">Compris</button></div>`,dl=>dl.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(!a)return;closeModal();if(a.dataset.a==='go'){saveDraft().then(closeEditor,()=>{});}}));return;}
-  const seq=nextSeq(d.type);const numero=makeNumero(d.type,seq,d.date);
-  const msg=d.type==='devis'?`Le devis recevra le numéro <b class="num">${esc(numero)}</b>. Il sera marqué « Émis, à envoyer » jusqu'à ce que tu l'envoies au client.`
+  const corr=inCorrection(d);const seq=corr?d.seq:nextSeq(d.type);const numero=corr?d.numero:makeNumero(d.type,seq,d.date);
+  const msg=corr?`La facture garde son numéro <b class="num">${esc(numero)}</b> et sa date. La correction est enregistrée, l'ancienne version reste dans l'historique. Pense à retélécharger le PDF.`:d.type==='devis'?`Le devis recevra le numéro <b class="num">${esc(numero)}</b>. Il sera marqué « Émis, à envoyer » jusqu'à ce que tu l'envoies au client.`
     :`${d.type==='facture'?'La facture':"L'avoir"} recevra le numéro <b class="num">${esc(numero)}</b>. Une fois émis, le document ne pourra plus être modifié ni supprimé : toute correction passera par un avoir.`;
   const cc=clientById(d.clientId);
   const warn=cc&&cc.type==='pro'&&d.type!=='devis'&&!cc.siren?`<br><br><span style="color:var(--c-orange)">Ce client professionnel n'a pas de SIREN. Ce n'est pas bloquant aujourd'hui, mais il deviendra obligatoire sur les factures entre professionnels en septembre 2027.</span>`:'';
@@ -1018,9 +1026,10 @@ async function emit(){
   if(!await confirmBox(`Émettre ${numero} ?`,msg+warn+warn2,'Émettre'))return;
   cleanLines(d);
   if(HOSTED&&window.GPF.quoteBase&&d.type==='devis'&&!d.signToken){d.signToken=payToken();d.lienDevis=window.GPF.quoteBase+d.signToken+'/';}
+  if(d.type!=='devis'&&isChorus(d)){d.lienPaiement='';delete d.payToken;}
   if(d.type!=='devis'&&isChorus(d)&&d.codeService==null)d.codeService=(clientById(d.clientId)||{}).codeService||'';
   if(HOSTED&&window.GPF.sumup&&d.type==='facture'&&!d.payToken&&!isChorus(d)){d.payToken=payToken();d.lienPaiement=window.GPF.payBase+d.payToken+'/';}
-  const out={...d,seq,numero,statut:d.type==='devis'?'emis':d.type==='facture'?'emise':'emis',client:snapshotClient(clientById(d.clientId)),emisLe:new Date().toISOString(),entreprise:(({logo,logoW,logoH,...r})=>r)(S.settings)};
+  const out={...d,seq,numero,statut:d.type==='devis'?'emis':d.type==='facture'?'emise':'emis',client:snapshotClient(clientById(d.clientId)),emisLe:corr&&d.emisLe?d.emisLe:new Date().toISOString(),...(corr?{corrigeLe:new Date().toISOString()}:{}),entreprise:(({logo,logoW,logoH,...r})=>r)(S.settings)};
   await safe(()=>put('docs',out),`${numero} émis`);
   if(d.type==='avoir'&&d.factureId){const f=S.docs.find(x=>x.id===d.factureId);if(f&&totals(out).ttc>=totals(f).ttc-0.01)await safe(()=>put('docs',{...f,statut:'avoiree',avoirNumero:numero}));}
   S.edit=JSON.parse(JSON.stringify(out));S.edTab='preview';renderEditor();
@@ -1030,6 +1039,7 @@ async function emit(){
 function roActions(d){
   const t=totals(d);const st=statusOf(d);
   let main='';
+  const reopen=canReopen(d)?`<button class="btn" data-act="reopen">Corriger (pas encore envoyée)</button>`:'';
   if(d.type==='devis'){
     if(d.statut==='emis')main=`<button class="btn" data-act="sent">Marquer comme envoyé</button>`;
     if(d.statut==='envoye'||d.statut==='emis')main+=`<button class="btn ${d.statut==='envoye'?'primary':''}" data-act="accepte">Marquer accepté</button><button class="btn" data-act="refuse">Marquer refusé</button>`;
@@ -1047,7 +1057,7 @@ function roActions(d){
     :`<dl class="kv"><dt>Montant</dt><dd class="num">${eur(-t.ttc)}</dd><dt>Sur facture</dt><dd class="num">${esc(d.avoirDe||'—')}</dd></dl>`;
   const lastSend=(d.envois||[]).slice(-1)[0];
   main+=`<button class="btn ${d.type==='devis'&&d.statut==='emis'?'primary':''}" data-act="mail">Envoyer par e-mail</button>${d.type==='facture'&&(st==='emise'||st==='retard')?`<button class="btn ${st==='retard'?'primary':''}" data-act="relance">Envoyer une relance</button>`:''}${d.type==='devis'&&d.statut==='envoye'?`<button class="btn" data-act="relance">Relancer maintenant</button>`:''}${lastSend?`<span class="muted" style="font-size:12.5px">Dernier e-mail le ${fmtDate(lastSend.date)} (${lastSend.kind==='relance-auto'?'relance automatique':lastSend.kind==='relance'?'relance':'envoi'})</span>`:''}${(ri=>!ri?'':ri.done?`<span class="muted" style="font-size:12.5px">Relance envoyée le ${fmtDate(ri.done)}.</span>`:ri.noEmail?`<span class="muted" style="font-size:12.5px">Pas de relance automatique : ce client n'a pas d'adresse e-mail.</span>`:ri.expires||ri.past?'':`<span class="muted" style="font-size:12.5px">Sans réponse, relance automatique le ${fmtDate(ri.due)}.</span>`)(relanceInfo(d))}`;
-  return `<div class="panel"><h3>Actions</h3>${info}${main}<button class="btn" data-act="pdf">${ICON.dl} Télécharger le PDF</button><button class="btn ghost" data-act="dup">Dupliquer en nouveau brouillon</button>${S.dl?'':`<span class="hint muted" style="font-size:12.5px">Le téléchargement n'est pas disponible dans cette vue.</span>`}</div>
+  return `<div class="panel"><h3>Actions</h3>${info}${main}${reopen}${(d.corrections||[]).length?`<span class="muted" style="font-size:12.5px">Corrigée ${d.corrections.length} fois (dernière le ${fmtDate(d.corrections.slice(-1)[0].date.slice(0,10))}).</span>`:''}<button class="btn" data-act="pdf">${ICON.dl} Télécharger le PDF</button><button class="btn ghost" data-act="dup">Dupliquer en nouveau brouillon</button>${S.dl?'':`<span class="hint muted" style="font-size:12.5px">Le téléchargement n'est pas disponible dans cette vue.</span>`}</div>
   ${d.type==='facture'&&isChorus(d)&&(st==='emise'||st==='retard')?`<div class="panel"><h3>Chorus Pro</h3><span class="muted" style="font-size:13px">Client public : dépose le PDF de cette facture sur Chorus Pro. Le client paiera par virement.</span>${d.lienPaiement?`<button class="btn sm" data-act="rmlink">Retirer le lien de paiement par carte</button>`:''}</div>`
    :HOSTED&&window.GPF.sumup&&d.type==='facture'&&(st==='emise'||st==='retard')?`<div class="panel"><h3>Paiement par carte</h3>${d.payToken?`<span class="muted" style="font-size:13px">Lien automatique, au bon montant. La facture passera en « Payée » toute seule après le paiement.</span><button class="btn ghost sm" data-act="rmlink">Retirer le lien (paiement par virement uniquement)</button><input type="text" readonly id="ro-paylink" value="${esc(d.lienPaiement)}"><button class="btn sm" data-act="copylink">Copier le lien</button>`:`<button class="btn sm" data-act="mklink">Créer le lien de paiement</button>`}</div>`
    :d.type==='facture'&&(st==='emise'||st==='retard')?`<div class="panel"><h3>Paiement par carte</h3><div class="field"><label for="ro-lien">Lien de paiement SumUp</label><input type="url" id="ro-lien" value="${esc(d.lienPaiement)}" placeholder="https://pay.sumup.com/…"></div><button class="btn sm" data-act="lien">Enregistrer le lien</button><span class="muted" style="font-size:12.5px">Crée le lien dans l'appli SumUp, colle-le ici, puis télécharge à nouveau le PDF.</span></div>`:''}
@@ -1077,6 +1087,10 @@ function bindRo(ed){
       await safe(()=>put('docs',nd),'Devis annulé');S.edit=nd;renderEditor();}
     if(a==='mksign'){const tk=payToken();const nd={...d,signToken:tk,lienDevis:window.GPF.quoteBase+tk+'/'};await safe(()=>put('docs',nd),'Lien de signature créé');S.edit=nd;renderEditor();}
     if(a==='copysign'){const v=$('#ro-signlink').value;try{await navigator.clipboard.writeText(v);toast('Lien copié');}catch(e){const i=$('#ro-signlink');i.focus();i.select();toast('Sélectionne le lien et copie-le');}}
+    if(a==='reopen'){
+      const ok2=await new Promise(res=>openModal(`<div class="panel-h"><h2>Corriger ${esc(d.numero)} ?</h2></div><div class="body" style="display:flex;flex-direction:column;gap:10px"><p style="margin:0">La facture redevient modifiable. Elle garde son numéro et sa date, et l'ancienne version est conservée dans l'historique.</p><label class="row" style="gap:8px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="ro-sure" style="width:18px;height:18px;margin-top:2px"> <span>Je confirme que le client <b>ne l'a pas reçue</b> : ni par e-mail, ni sur Chorus Pro, ni en main propre.</span></label></div><div class="foot"><button class="btn" data-a="no">Annuler</button><button class="btn primary" data-a="ok">Corriger</button></div>`,dl=>dl.addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(!b)return;if(b.dataset.a==='ok'&&!$('#ro-sure',dl).checked){toast('Coche la case pour confirmer');return;}closeModal();res(b.dataset.a==='ok');})));
+      if(!ok2)return;
+      const nd={...d,statut:'brouillon'};await safe(()=>put('docs',nd),'Facture rouverte pour correction');S.edit=JSON.parse(JSON.stringify(nd));S.edTab='form';renderEditor();return;}
     if(a==='rmlink'){if(!await confirmBox('Retirer le paiement par carte ?',"Le lien de paiement disparaît de la facture et des prochains e-mails. Télécharge ensuite à nouveau le PDF : il ne demandera plus que le virement.",'Retirer'))return;const nd={...d,lienPaiement:'',payToken:''};await safe(()=>put('docs',nd),'Lien de paiement retiré');S.edit=nd;renderEditor();}
     if(a==='mklink'){const tk=payToken();const nd={...d,payToken:tk,lienPaiement:window.GPF.payBase+tk+'/'};await safe(()=>put('docs',nd),'Lien de paiement créé');S.edit=nd;renderEditor();}
     if(a==='copylink'){const v=$('#ro-paylink').value;try{await navigator.clipboard.writeText(v);toast('Lien copié');}catch(e){const i=$('#ro-paylink');i.focus();i.select();toast('Sélectionne le lien et copie-le');}}
