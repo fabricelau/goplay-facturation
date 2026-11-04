@@ -1,7 +1,7 @@
 {
-  "version": "1.8.2",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.8.2.zip",
+  "version": "1.9.0",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.9.0.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Noms des PDF compatibles Chorus Pro (50 caractères maximum, sans accents ni espaces)."
+  "changelog": "Clients publics (Chorus Pro) : pas de paiement par carte, SIRET, code service et n° d'engagement.\nBouton « Retirer le lien de paiement par carte ».\nNoms des PDF compatibles Chorus Pro."
 }

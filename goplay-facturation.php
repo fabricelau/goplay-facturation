@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.8.2
+ * Version: 1.9.0
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.8.2');
+define('GPF_VERSION', '1.9.0');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -481,7 +481,7 @@ function gpf_rest_companies($req) {
         $siren = (string)($r['siren'] ?? '');
         $tva = is_array($r['tva'] ?? null) && !empty($r['tva'][0]) ? (string)$r['tva'][0] : (preg_match('/^\d{9}$/', $siren) ? 'FR' . str_pad((string)((12 + 3 * ((int)$siren % 97)) % 97), 2, '0', STR_PAD_LEFT) . $siren : '');
         $out[] = ['nom' => (string)($r['nom_complet'] ?? $r['nom_raison_sociale'] ?? ''), 'siren' => $siren, 'tva' => $tva,
-            'adresse' => trim(($comp ? $comp . ', ' : '') . $street, ', '), 'cp' => (string)($sg['code_postal'] ?? ''), 'ville' => (string)($sg['libelle_commune'] ?? ''),
+            'adresse' => trim(($comp ? $comp . ', ' : '') . $street, ', '), 'cp' => (string)($sg['code_postal'] ?? ''), 'ville' => (string)($sg['libelle_commune'] ?? ''), 'siret' => (string)($sg['siret'] ?? ''),
             'actif' => ($r['etat_administratif'] ?? 'A') === 'A'];
     }
     set_transient($key, $out, DAY_IN_SECONDS);

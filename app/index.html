@@ -517,6 +517,8 @@ function soldeInfo(d){
 }
 /* a deposit invoice: from a quote (acompteDe) or created directly (acompteLibre) */
 const isAc=d=>!!(d&&(d.acompteDe||d.acompteLibre));
+/* public-sector client invoiced through Chorus Pro: paid by bank transfer, never by card */
+const isChorus=d=>!!(d&&((d.client&&d.client.chorus)||(!d.numero&&(clientById(d.clientId)||{}).chorus)));
 function newDoc(type,base={}){
   const d={id:uid(),type,statut:'brouillon',...(S.settings.modeTest?{test:true}:{}),saisie:S.settings.saisiePrix==='ttc'?'ttc':'ht',date:today(),clientId:'',client:null,objet:'',nature:'services',lignes:[],notes:'',lienPaiement:'',createdAt:new Date().toISOString(),...base};
   if(type==='devis')d.validite=d.validite||addDays(d.date,S.settings.validiteDevis||30);
@@ -730,7 +732,7 @@ function vParams(){
   const f=(k,l,type='text',extra='')=>`<div class="field ${extra}"><label for="p-${k}">${l}</label><input type="${type}" id="p-${k}" data-p="${k}" value="${esc(s[k])}"></div>`;
   return `<div class="head"><div><h1>Réglages</h1><p>Ces informations apparaissent sur tous tes documents.</p></div><button class="btn primary" id="save-params">Enregistrer</button></div>
   <div class="panel"><div class="sec-title">Ton entreprise</div><div class="form">
-    ${f('prenom','Ton prénom (pour l\'accueil)')}${f('nom','Nom ou raison sociale')}${f('forme','Forme juridique')}${f('siren','SIREN (9 chiffres)')}${f('rcs','RCS / RM (ville d\'immatriculation)')}
+    ${f('prenom','Ton prénom (pour l\'accueil)')}${f('nom','Nom ou raison sociale')}${f('forme','Forme juridique')}${f('siren','SIREN (9 chiffres)')}${f('siret','SIRET (14 chiffres, pour Chorus Pro)')}${f('rcs','RCS / RM (ville d\'immatriculation)')}
     ${f('adresse','Adresse','text','full')}${f('cp','Code postal')}${f('ville','Ville')}${f('tel','Téléphone','tel')}${f('email','E-mail','email')}
   </div></div>
   <div class="panel"><div class="sec-title">Logo</div><div class="form">
@@ -834,7 +836,7 @@ function bindView(v){
 
 /* ---------- client & article forms ---------- */
 function clientForm(c){
-  const x=c?{...c}:{id:null,nom:'',prenom:'',nomFamille:'',type:'particulier',siren:'',tvaIntra:'',adresse:'',cp:'',ville:'',email:'',tel:'',contact:''};
+  const x=c?{...c}:{id:null,nom:'',prenom:'',nomFamille:'',type:'particulier',siren:'',siret:'',chorus:false,codeService:'',tvaIntra:'',adresse:'',cp:'',ville:'',email:'',tel:'',contact:''};
   if(x.type!=='pro'&&!x.prenom&&!x.nomFamille&&x.nom){const p=x.nom.split(' ');x.prenom=p.length>1?p.shift():'';x.nomFamille=p.join(' ');}
   const f=(k,l,type='text',cls='')=>`<div class="field ${cls}"><label for="c-${k}">${l}</label><input type="${type}" id="c-${k}" data-k="${k}" value="${esc(x[k])}"></div>`;
   return new Promise(res=>openModal(`<div class="panel-h"><h2>${c?'Modifier le client':'Nouveau client'}</h2><button class="btn ghost sm" data-a="close" aria-label="Fermer">${ICON.x}</button></div>
@@ -844,6 +846,8 @@ function clientForm(c){
       ${f('prenom','Prénom','text','for-part')}${f('nomFamille','Nom','text','for-part')}
       ${f('nom','Raison sociale','text','full for-pro')}${f('contact','Personne à contacter (facultatif)','text','for-pro')}${f('siren','SIREN','text','for-pro')}
       ${f('adresse','Adresse','text','full')}${f('cp','Code postal')}${f('ville','Ville')}${f('email','E-mail','email')}${f('tel','Téléphone','tel')}${f('tvaIntra','N° TVA intracommunautaire (facultatif)','text','full for-pro')}
+      <div class="field full for-pro"><label class="row" style="gap:8px;font-weight:600;cursor:pointer"><input type="checkbox" id="c-chorus" ${x.chorus?'checked':''} style="width:18px;height:18px"> Client public : factures déposées sur Chorus Pro</label><span class="hint">Mairie, école, collectivité, administration… Les factures sont alors payées par virement : pas de lien de paiement par carte.</span></div>
+      ${f('siret','SIRET (14 chiffres, facultatif sauf Chorus Pro)','text','for-pro')}${f('codeService','Code service Chorus (si le client te l\'a donné)','text','for-pro for-chorus')}
     </div>
     <div class="foot">${c?`<button class="btn danger" data-a="del" style="margin-right:auto">Supprimer</button>`:''}<button class="btn" data-a="close">Annuler</button><button class="btn primary" data-a="save">Enregistrer</button></div>`,dl=>{
       const sgo=$('#c-search-go',dl);if(sgo){const run=async()=>{const q=$('#c-search',dl).value.trim();const box=$('#c-results',dl);if(q.length<3){box.innerHTML='<span class="hint">Tape au moins 3 caractères.</span>';return;}
@@ -852,16 +856,19 @@ function clientForm(c){
           const res=j.results||[];if(!res.length){box.innerHTML='<span class="hint">Aucune entreprise trouvée. Vérifie l\'orthographe ou le SIREN.</span>';return;}
           box.innerHTML=res.map((c,i)=>`<button type="button" class="co-item" data-co="${i}"><b>${esc(c.nom)}</b>${c.actif?'':' <span class="pill p-bad">Fermée</span>'}<small>SIREN ${esc(c.siren)} · ${esc(titleCase([c.adresse,[c.cp,titleCase(c.ville)].filter(Boolean).join(' ')].filter(Boolean).join(', ')))}</small></button>`).join('');
           $$('[data-co]',box).forEach(b=>b.addEventListener('click',()=>{const c=res[+b.dataset.co];const set=(k,v)=>{const i=$('#c-'+k,dl);if(i&&v)i.value=v;};
-            set('nom',c.nom);set('siren',c.siren);set('tvaIntra',c.tva);set('adresse',titleCase(c.adresse));set('cp',c.cp);set('ville',titleCase(c.ville));
+            set('nom',c.nom);set('siren',c.siren);set('siret',c.siret);set('tvaIntra',c.tva);set('adresse',titleCase(c.adresse));set('cp',c.cp);set('ville',titleCase(c.ville));
             box.innerHTML=`<span class="hint" style="color:var(--ok)">✓ Informations remplies depuis l'annuaire. Ajoute l'e-mail et le téléphone.</span>`;if(!c.actif)toast('Attention : cette entreprise est indiquée comme fermée.');}));
         }catch(e){box.innerHTML=`<span class="hint" style="color:var(--danger)">${esc(e.message||"La recherche n'a pas abouti.")}</span>`;}};
         sgo.addEventListener('click',run);$('#c-search',dl).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();run();}});}
-      const showType=()=>{$$('.for-part',dl).forEach(el=>el.hidden=x.type==='pro');$$('.for-pro',dl).forEach(el=>el.hidden=x.type!=='pro');};showType();
+      const showType=()=>{$$('.for-part',dl).forEach(el=>el.hidden=x.type==='pro');$$('.for-pro',dl).forEach(el=>el.hidden=x.type!=='pro');const ch=$('#c-chorus',dl);$$('.for-chorus',dl).forEach(el=>el.hidden=x.type!=='pro'||!(ch&&ch.checked));};showType();$('#c-chorus',dl).addEventListener('change',showType);
       $$('#c-type button',dl).forEach(b=>b.addEventListener('click',()=>{x.type=b.dataset.v;$$('#c-type button',dl).forEach(y=>y.classList.toggle('on',y===b));showType();}));
       dl.addEventListener('click',async e=>{const a=e.target.closest('[data-a]');if(!a)return;
         if(a.dataset.a==='close'){closeModal();res(null);}
-        if(a.dataset.a==='save'){$$('[data-k]',dl).forEach(i=>x[i.dataset.k]=i.value.trim());
-          if(x.type!=='pro'){if(!x.nomFamille){toast('Indique au moins le nom du client');return;}x.nom=[x.prenom,x.nomFamille].filter(Boolean).join(' ');x.contact='';x.siren='';x.tvaIntra='';}
+        if(a.dataset.a==='save'){$$('[data-k]',dl).forEach(i=>x[i.dataset.k]=i.value.trim());x.chorus=x.type==='pro'&&$('#c-chorus',dl).checked;x.siret=x.siret.replace(/\s/g,'');
+          if(x.siret&&!/^\d{14}$/.test(x.siret)){toast('Le SIRET doit contenir 14 chiffres');return;}
+          if(x.chorus&&!x.siret){toast('Pour Chorus Pro, indique le SIRET du client (14 chiffres)');return;}
+          if(x.siret&&!x.siren)x.siren=x.siret.slice(0,9);
+          if(x.type!=='pro'){if(!x.nomFamille){toast('Indique au moins le nom du client');return;}x.nom=[x.prenom,x.nomFamille].filter(Boolean).join(' ');x.contact='';x.siren='';x.tvaIntra='';x.siret='';x.chorus=false;x.codeService='';}
           else if(!x.nom){toast('Indique la raison sociale du client');return;}
           const saved=await safe(()=>put('clients',x),'Client enregistré');closeModal();res(saved);}
         if(a.dataset.a==='del'){if((S.allDocs||S.docs).some(d=>d.clientId===c.id&&d.seq)){toast("Ce client a des documents émis : il ne peut pas être supprimé.");return;}
@@ -916,6 +923,7 @@ function formHtml(d){
   return `<div class="panel"><div class="form">
     <div class="field full"><label for="e-client">Client</label><div class="row" style="flex-wrap:nowrap"><select id="e-client"><option value="">Choisir un client…</option>${cl.map(c=>`<option value="${c.id}" ${c.id===d.clientId?'selected':''}>${esc(c.nom)}</option>`).join('')}</select><button class="btn" id="e-newclient">+ Nouveau</button></div></div>
     <div class="field full"><label for="e-objet">Objet</label><input type="text" id="e-objet" data-f="objet" value="${esc(d.objet)}" placeholder="Ex. Rénovation salle de bain"></div>
+    ${d.type!=='devis'&&isChorus(d)?`<div class="field"><label for="e-engagement">N° d'engagement / bon de commande</label><input type="text" id="e-engagement" data-f="engagement" value="${esc(d.engagement||'')}" placeholder="Si le client t'en a donné un"></div><div class="field"><label for="e-codeService">Code service Chorus</label><input type="text" id="e-codeService" data-f="codeService" value="${esc(d.codeService!=null?d.codeService:((clientById(d.clientId)||{}).codeService||''))}"></div><div class="field full"><span class="hint">Client public : facture à déposer sur Chorus Pro, payée par virement (pas de lien de paiement par carte).</span></div>`:''}
     <div class="field"><label for="e-date">Date</label><input type="date" id="e-date" data-f="date" value="${esc(d.date)}"></div>
     ${d.type==='devis'?`<div class="field"><label for="e-validite">Valable jusqu'au</label><input type="date" id="e-validite" data-f="validite" value="${esc(d.validite)}"></div>`:''}
     ${d.type==='facture'?`<div class="field"><label for="e-echeance">Échéance de paiement</label><input type="date" id="e-echeance" data-f="echeance" value="${esc(d.echeance)}"></div>`:''}
@@ -968,7 +976,7 @@ function bindForm(ed){
   $$('[data-f]',ed).forEach(i=>i.addEventListener('input',()=>{S.edit[i.dataset.f]=i.value;
     if(i.dataset.f==='date'&&i.value){const d=S.edit;if(d.type==='facture'){d.echeance=addDays(d.date,S.settings.delaiPaiement??30);const x=$('#e-echeance');if(x)x.value=d.echeance;}if(d.type==='devis'){d.validite=addDays(d.date,S.settings.validiteDevis||30);const x=$('#e-validite');if(x)x.value=d.validite;}}
     updatePreview();}));
-  $('#e-client',ed).addEventListener('change',e=>{S.edit.clientId=e.target.value;if(S.edit.type==='facture'&&!isAc(S.edit)&&!!$('#e-deduct')!==!!(S.edit.clientId&&freeDepositsOf(S.edit.clientId,S.edit.id).length))renderEditor();else updatePreview();});
+  $('#e-client',ed).addEventListener('change',e=>{const ch0=isChorus(S.edit);S.edit.clientId=e.target.value;if(S.edit.type!=='devis'&&isChorus(S.edit)!==ch0){if(isChorus(S.edit)&&S.edit.codeService==null)S.edit.codeService=(clientById(S.edit.clientId)||{}).codeService||'';renderEditor();return;}if(S.edit.type==='facture'&&!isAc(S.edit)&&!!$('#e-deduct')!==!!(S.edit.clientId&&freeDepositsOf(S.edit.clientId,S.edit.id).length))renderEditor();else updatePreview();});
   $('#e-newclient',ed).addEventListener('click',async()=>{const c=await clientForm(null);if(c){S.edit.clientId=c.id;const keep=S.edit;setTimeout(()=>{if(S.edit===keep){const sel=$('#e-client');if(sel){if(!sel.querySelector(`option[value="${c.id}"]`))sel.insertAdjacentHTML('beforeend',`<option value="${c.id}">${esc(c.nom)}</option>`);sel.value=c.id;}updatePreview();}},150);}});
   bindLines(ed);
   $('#e-lines',ed).addEventListener('change',e=>{const tr=e.target.closest('tr[data-i]');if(!tr||e.target.tagName!=='SELECT')return;const l=S.edit.lignes[+tr.dataset.i];const k=e.target.dataset.l;l[k]=k==='tva'?+e.target.value:e.target.value;updatePreview();});
@@ -995,7 +1003,7 @@ function bindForm(ed){
 }
 function updatePreview(){renderTotals();const am=$('#e-acMt');if(am){const a=acompteDemande(S.edit);am.textContent=a?'soit '+eur(a.mt)+' TTC':'';}const p=$('#paper');if(p)p.innerHTML=paperHtml(S.edit);}
 
-function snapshotClient(c){return c?{nom:c.nom,type:c.type,siren:c.siren||'',tvaIntra:c.tvaIntra||'',adresse:c.adresse||'',cp:c.cp||'',ville:c.ville||'',email:c.email||'',contact:c.contact||''}:null;}
+function snapshotClient(c){return c?{nom:c.nom,type:c.type,siren:c.siren||'',siret:c.siret||'',chorus:!!c.chorus,codeService:c.codeService||'',tvaIntra:c.tvaIntra||'',adresse:c.adresse||'',cp:c.cp||'',ville:c.ville||'',email:c.email||'',contact:c.contact||''}:null;}
 function cleanLines(d){d.lignes=(d.lignes||[]).filter(l=>l.designation||hasPrice(l)).map(l=>({...l,qte:+l.qte||0,pu:+l.pu||0,puTTC:+l.puTTC||0,tva:isFranchise()?0:+l.tva||0}));if(!d.lignes.length)d.lignes=[{id:uid(),designation:'',details:'',qte:1,unite:'u',pu:0,tva:8.5}];}
 async function saveDraft(){const d=S.edit;d.client=snapshotClient(clientById(d.clientId));await safe(()=>put('docs',JSON.parse(JSON.stringify(d))),'Brouillon enregistré');S.edit=JSON.parse(JSON.stringify(d));}
 async function emit(){
@@ -1010,7 +1018,8 @@ async function emit(){
   if(!await confirmBox(`Émettre ${numero} ?`,msg+warn+warn2,'Émettre'))return;
   cleanLines(d);
   if(HOSTED&&window.GPF.quoteBase&&d.type==='devis'&&!d.signToken){d.signToken=payToken();d.lienDevis=window.GPF.quoteBase+d.signToken+'/';}
-  if(HOSTED&&window.GPF.sumup&&d.type==='facture'&&!d.payToken){d.payToken=payToken();d.lienPaiement=window.GPF.payBase+d.payToken+'/';}
+  if(d.type!=='devis'&&isChorus(d)&&d.codeService==null)d.codeService=(clientById(d.clientId)||{}).codeService||'';
+  if(HOSTED&&window.GPF.sumup&&d.type==='facture'&&!d.payToken&&!isChorus(d)){d.payToken=payToken();d.lienPaiement=window.GPF.payBase+d.payToken+'/';}
   const out={...d,seq,numero,statut:d.type==='devis'?'emis':d.type==='facture'?'emise':'emis',client:snapshotClient(clientById(d.clientId)),emisLe:new Date().toISOString(),entreprise:(({logo,logoW,logoH,...r})=>r)(S.settings)};
   await safe(()=>put('docs',out),`${numero} émis`);
   if(d.type==='avoir'&&d.factureId){const f=S.docs.find(x=>x.id===d.factureId);if(f&&totals(out).ttc>=totals(f).ttc-0.01)await safe(()=>put('docs',{...f,statut:'avoiree',avoirNumero:numero}));}
@@ -1039,7 +1048,8 @@ function roActions(d){
   const lastSend=(d.envois||[]).slice(-1)[0];
   main+=`<button class="btn ${d.type==='devis'&&d.statut==='emis'?'primary':''}" data-act="mail">Envoyer par e-mail</button>${d.type==='facture'&&(st==='emise'||st==='retard')?`<button class="btn ${st==='retard'?'primary':''}" data-act="relance">Envoyer une relance</button>`:''}${d.type==='devis'&&d.statut==='envoye'?`<button class="btn" data-act="relance">Relancer maintenant</button>`:''}${lastSend?`<span class="muted" style="font-size:12.5px">Dernier e-mail le ${fmtDate(lastSend.date)} (${lastSend.kind==='relance-auto'?'relance automatique':lastSend.kind==='relance'?'relance':'envoi'})</span>`:''}${(ri=>!ri?'':ri.done?`<span class="muted" style="font-size:12.5px">Relance envoyée le ${fmtDate(ri.done)}.</span>`:ri.noEmail?`<span class="muted" style="font-size:12.5px">Pas de relance automatique : ce client n'a pas d'adresse e-mail.</span>`:ri.expires||ri.past?'':`<span class="muted" style="font-size:12.5px">Sans réponse, relance automatique le ${fmtDate(ri.due)}.</span>`)(relanceInfo(d))}`;
   return `<div class="panel"><h3>Actions</h3>${info}${main}<button class="btn" data-act="pdf">${ICON.dl} Télécharger le PDF</button><button class="btn ghost" data-act="dup">Dupliquer en nouveau brouillon</button>${S.dl?'':`<span class="hint muted" style="font-size:12.5px">Le téléchargement n'est pas disponible dans cette vue.</span>`}</div>
-  ${HOSTED&&window.GPF.sumup&&d.type==='facture'&&(st==='emise'||st==='retard')?`<div class="panel"><h3>Paiement par carte</h3>${d.payToken?`<span class="muted" style="font-size:13px">Lien automatique, au bon montant. La facture passera en « Payée » toute seule après le paiement.</span><input type="text" readonly id="ro-paylink" value="${esc(d.lienPaiement)}"><button class="btn sm" data-act="copylink">Copier le lien</button>`:`<button class="btn sm" data-act="mklink">Créer le lien de paiement</button>`}</div>`
+  ${d.type==='facture'&&isChorus(d)&&(st==='emise'||st==='retard')?`<div class="panel"><h3>Chorus Pro</h3><span class="muted" style="font-size:13px">Client public : dépose le PDF de cette facture sur Chorus Pro. Le client paiera par virement.</span>${d.lienPaiement?`<button class="btn sm" data-act="rmlink">Retirer le lien de paiement par carte</button>`:''}</div>`
+   :HOSTED&&window.GPF.sumup&&d.type==='facture'&&(st==='emise'||st==='retard')?`<div class="panel"><h3>Paiement par carte</h3>${d.payToken?`<span class="muted" style="font-size:13px">Lien automatique, au bon montant. La facture passera en « Payée » toute seule après le paiement.</span><button class="btn ghost sm" data-act="rmlink">Retirer le lien (paiement par virement uniquement)</button><input type="text" readonly id="ro-paylink" value="${esc(d.lienPaiement)}"><button class="btn sm" data-act="copylink">Copier le lien</button>`:`<button class="btn sm" data-act="mklink">Créer le lien de paiement</button>`}</div>`
    :d.type==='facture'&&(st==='emise'||st==='retard')?`<div class="panel"><h3>Paiement par carte</h3><div class="field"><label for="ro-lien">Lien de paiement SumUp</label><input type="url" id="ro-lien" value="${esc(d.lienPaiement)}" placeholder="https://pay.sumup.com/…"></div><button class="btn sm" data-act="lien">Enregistrer le lien</button><span class="muted" style="font-size:12.5px">Crée le lien dans l'appli SumUp, colle-le ici, puis télécharge à nouveau le PDF.</span></div>`:''}
   ${HOSTED&&window.GPF.quoteBase&&d.type==='devis'&&['emis','envoye'].includes(d.statut)?`<div class="panel"><h3>Signature en ligne</h3>${d.signToken?`<span class="muted" style="font-size:13px">Le client ouvre ce lien, lit le devis et clique sur « Accepter ». Le devis passe tout seul en « Accepté » et tu reçois un e-mail.</span><input type="text" readonly id="ro-signlink" value="${esc(d.lienDevis)}"><button class="btn sm" data-act="copysign">Copier le lien</button>`:`<button class="btn sm" data-act="mksign">Créer le lien de signature</button>`}</div>`:''}
   <div class="panel"><h3>Client</h3><span>${esc(clientLabel(d.client))}</span><span class="muted" style="font-size:13px">${esc([d.client&&d.client.email,d.client&&d.client.tel].filter(Boolean).join(' · '))}</span></div>`;
@@ -1067,6 +1077,7 @@ function bindRo(ed){
       await safe(()=>put('docs',nd),'Devis annulé');S.edit=nd;renderEditor();}
     if(a==='mksign'){const tk=payToken();const nd={...d,signToken:tk,lienDevis:window.GPF.quoteBase+tk+'/'};await safe(()=>put('docs',nd),'Lien de signature créé');S.edit=nd;renderEditor();}
     if(a==='copysign'){const v=$('#ro-signlink').value;try{await navigator.clipboard.writeText(v);toast('Lien copié');}catch(e){const i=$('#ro-signlink');i.focus();i.select();toast('Sélectionne le lien et copie-le');}}
+    if(a==='rmlink'){if(!await confirmBox('Retirer le paiement par carte ?',"Le lien de paiement disparaît de la facture et des prochains e-mails. Télécharge ensuite à nouveau le PDF : il ne demandera plus que le virement.",'Retirer'))return;const nd={...d,lienPaiement:'',payToken:''};await safe(()=>put('docs',nd),'Lien de paiement retiré');S.edit=nd;renderEditor();}
     if(a==='mklink'){const tk=payToken();const nd={...d,payToken:tk,lienPaiement:window.GPF.payBase+tk+'/'};await safe(()=>put('docs',nd),'Lien de paiement créé');S.edit=nd;renderEditor();}
     if(a==='copylink'){const v=$('#ro-paylink').value;try{await navigator.clipboard.writeText(v);toast('Lien copié');}catch(e){const i=$('#ro-paylink');i.focus();i.select();toast('Sélectionne le lien et copie-le');}}
     if(a==='sent'){const nd={...d,statut:'envoye',envois:[...(d.envois||[]),{date:today(),kind:'manuel'}]};await safe(()=>put('docs',nd),'Devis marqué envoyé');S.edit=nd;renderEditor();}
@@ -1287,10 +1298,11 @@ function fxVat(s){
   const sir=String(s.siren||'').replace(/\D/g,'');if(sir.length===9){const k=(12+3*(+sir%97))%97;return 'FR'+String(k).padStart(2,'0')+sir;}return '';
 }
 function fxParty(tag,x,opts){
-  const sir=String(x.siren||'').replace(/\D/g,'');const vat=opts.vat;
+  const sir=String(x.siren||'').replace(/\D/g,'');const sit=String(x.siret||'').replace(/\D/g,'');const vat=opts.vat;
   let o=`<ram:${tag}><ram:Name>${xe(x.nom||'')}</ram:Name>`;
   if(opts.desc)o+=`<ram:Description>${xe(opts.desc)}</ram:Description>`;
-  if(sir.length===9)o+=`<ram:SpecifiedLegalOrganization><ram:ID schemeID="0002">${sir}</ram:ID></ram:SpecifiedLegalOrganization>`;
+  if(sit.length===14)o+=`<ram:SpecifiedLegalOrganization><ram:ID schemeID="0009">${sit}</ram:ID></ram:SpecifiedLegalOrganization>`;
+  else if(sir.length===9)o+=`<ram:SpecifiedLegalOrganization><ram:ID schemeID="0002">${sir}</ram:ID></ram:SpecifiedLegalOrganization>`;
   if(opts.tel||opts.mail)o+=`<ram:DefinedTradeContact>${opts.tel?`<ram:TelephoneUniversalCommunication><ram:CompleteNumber>${xe(opts.tel)}</ram:CompleteNumber></ram:TelephoneUniversalCommunication>`:''}${opts.mail?`<ram:EmailURIUniversalCommunication><ram:URIID>${xe(opts.mail)}</ram:URIID></ram:EmailURIUniversalCommunication>`:''}</ram:DefinedTradeContact>`;
   o+='<ram:PostalTradeAddress>'+(x.cp?`<ram:PostcodeCode>${xe(x.cp)}</ram:PostcodeCode>`:'')+(x.adresse?`<ram:LineOne>${xe(String(x.adresse).replace(/\s*\n\s*/g,', '))}</ram:LineOne>`:'')+(x.ville?`<ram:CityName>${xe(x.ville)}</ram:CityName>`:'')+'<ram:CountryID>FR</ram:CountryID></ram:PostalTradeAddress>';
   if(opts.mail&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(opts.mail))o+=`<ram:URIUniversalCommunication><ram:URIID schemeID="EM">${xe(opts.mail)}</ram:URIID></ram:URIUniversalCommunication>`;
@@ -1340,7 +1352,7 @@ function fxXml(d){
 <rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:qdt="urn:un:unece:uncefact:data:standard:QualifiedDataType:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
 <rsm:ExchangedDocumentContext><ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>urn:cen.eu:en16931:2017</ram:ID></ram:GuidelineSpecifiedDocumentContextParameter></rsm:ExchangedDocumentContext>
 <rsm:ExchangedDocument><ram:ID>${xe(d.numero)}</ram:ID><ram:TypeCode>${type}</ram:TypeCode><ram:IssueDateTime><udt:DateTimeString format="102">${fxD(d.date)}</udt:DateTimeString></ram:IssueDateTime>${notes.map(([x,code])=>`<ram:IncludedNote><ram:Content>${xe(x)}</ram:Content>${code?`<ram:SubjectCode>${code}</ram:SubjectCode>`:''}</ram:IncludedNote>`).join('')}</rsm:ExchangedDocument>
-<rsm:SupplyChainTradeTransaction>${lines.join('')}<ram:ApplicableHeaderTradeAgreement>${seller}${buyer}${devisRef?`<ram:ContractReferencedDocument><ram:IssuerAssignedID>${xe(devisRef)}</ram:IssuerAssignedID></ram:ContractReferencedDocument>`:''}</ram:ApplicableHeaderTradeAgreement><ram:ApplicableHeaderTradeDelivery>${d.evtDate?`<ram:ActualDeliverySupplyChainEvent><ram:OccurrenceDateTime><udt:DateTimeString format="102">${fxD(d.evtDate)}</udt:DateTimeString></ram:OccurrenceDateTime></ram:ActualDeliverySupplyChainEvent>`:''}</ram:ApplicableHeaderTradeDelivery><ram:ApplicableHeaderTradeSettlement>${d.type!=='avoir'?`<ram:PaymentReference>${xe(d.numero)}</ram:PaymentReference>`:''}<ram:InvoiceCurrencyCode>EUR</ram:InvoiceCurrencyCode>${pm}${taxes}${terms}<ram:SpecifiedTradeSettlementHeaderMonetarySummation><ram:LineTotalAmount>${fxA(lineSum)}</ram:LineTotalAmount><ram:TaxBasisTotalAmount>${fxA(t.ht)}</ram:TaxBasisTotalAmount><ram:TaxTotalAmount currencyID="EUR">${fxA(fr?0:t.tva)}</ram:TaxTotalAmount><ram:GrandTotalAmount>${fxA(t.ttc)}</ram:GrandTotalAmount><ram:DuePayableAmount>${fxA(t.ttc)}</ram:DuePayableAmount></ram:SpecifiedTradeSettlementHeaderMonetarySummation>${ref}</ram:ApplicableHeaderTradeSettlement></rsm:SupplyChainTradeTransaction>
+<rsm:SupplyChainTradeTransaction>${lines.join('')}<ram:ApplicableHeaderTradeAgreement>${d.codeService?`<ram:BuyerReference>${xe(d.codeService)}</ram:BuyerReference>`:''}${seller}${buyer}${d.engagement?`<ram:BuyerOrderReferencedDocument><ram:IssuerAssignedID>${xe(d.engagement)}</ram:IssuerAssignedID></ram:BuyerOrderReferencedDocument>`:''}${devisRef?`<ram:ContractReferencedDocument><ram:IssuerAssignedID>${xe(devisRef)}</ram:IssuerAssignedID></ram:ContractReferencedDocument>`:''}</ram:ApplicableHeaderTradeAgreement><ram:ApplicableHeaderTradeDelivery>${d.evtDate?`<ram:ActualDeliverySupplyChainEvent><ram:OccurrenceDateTime><udt:DateTimeString format="102">${fxD(d.evtDate)}</udt:DateTimeString></ram:OccurrenceDateTime></ram:ActualDeliverySupplyChainEvent>`:''}</ram:ApplicableHeaderTradeDelivery><ram:ApplicableHeaderTradeSettlement>${d.type!=='avoir'?`<ram:PaymentReference>${xe(d.numero)}</ram:PaymentReference>`:''}<ram:InvoiceCurrencyCode>EUR</ram:InvoiceCurrencyCode>${pm}${taxes}${terms}<ram:SpecifiedTradeSettlementHeaderMonetarySummation><ram:LineTotalAmount>${fxA(lineSum)}</ram:LineTotalAmount><ram:TaxBasisTotalAmount>${fxA(t.ht)}</ram:TaxBasisTotalAmount><ram:TaxTotalAmount currencyID="EUR">${fxA(fr?0:t.tva)}</ram:TaxTotalAmount><ram:GrandTotalAmount>${fxA(t.ttc)}</ram:GrandTotalAmount><ram:DuePayableAmount>${fxA(t.ttc)}</ram:DuePayableAmount></ram:SpecifiedTradeSettlementHeaderMonetarySummation>${ref}</ram:ApplicableHeaderTradeSettlement></rsm:SupplyChainTradeTransaction>
 </rsm:CrossIndustryInvoice>`;
 }
 function fxXmp(m){
@@ -1443,6 +1455,7 @@ function virLines(d,s){
 function titleCase(x){const small=['de','du','des','la','le','les','et','en','sur','aux','au'];return String(x||'').toLowerCase().replace(/[a-zà-ÿ0-9]+(['’][a-zà-ÿ]+)?/gi,(w,_,i)=>i>0&&small.includes(w)?w:w.charAt(0).toUpperCase()+w.slice(1)).replace(/\b(D|L)(['’])([a-zà-ÿ])/g,(m,a,b,c)=>a.toLowerCase()+b+c.toUpperCase()).replace(/^d(['’])/,'D$1').replace(/\b(Zi|Za|Zac|Zae|Bp|Cs|Rn|Rd|Cedex)\b/g,w=>w.toUpperCase());}
 function evtLines(d){
   const out=[];
+  if(d.type!=='devis'&&(d.engagement||d.codeService))out.push([d.engagement?"N° d'engagement : "+d.engagement:'',d.codeService?'Code service : '+d.codeService:''].filter(Boolean).join(' · '));
   if(d.evtDate){let x='Date de la session : '+new Date(d.evtDate+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});if(d.evtHeure)x+=' à '+d.evtHeure.replace(':','h');if(d.evtDuree)x+=' · durée '+d.evtDuree;out.push(x);}
   else if(d.evtHeure||d.evtDuree)out.push([d.evtHeure?'Heure : '+d.evtHeure.replace(':','h'):'',d.evtDuree?'Durée : '+d.evtDuree:''].filter(Boolean).join(' · '));
   if(d.participants||d.accompagnateurs)out.push([d.participants?`Participants : ${d.participants}`:'',d.accompagnateurs?`Accompagnateurs : ${d.accompagnateurs}`:''].filter(Boolean).join(' · '));
