@@ -1400,8 +1400,12 @@ function pdfName(d){
   const kind=d.type==='devis'?'Devis':d.type==='avoir'?'Avoir':'Facture';
   const sub=d.type!=='facture'?'':isAc(d)?'Acompte':(d.lignes||[]).some(l=>l.acompteRef)?'Solde':'';
   const c=(d.client&&d.client.nom)||((clientById(d.clientId)||{}).nom)||'';
-  const nm=String(c).replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,' ').trim().slice(0,50);
-  return [kind,d.numero||'brouillon',sub,nm].filter(Boolean).join('_')+'.pdf';
+  /* Chorus Pro and most platforms refuse file names over 50 characters, accents and spaces: keep it short and plain */
+  const plain=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9-]+/g,'-').replace(/-{2,}/g,'-').replace(/^-|-$/g,'');
+  const head=[kind,plain(d.numero)||'brouillon',sub].filter(Boolean).join('_');
+  const room=50-'.pdf'.length-head.length-1;
+  let nm=room>2?plain(c):'';if(nm.length>room){const cut=nm.slice(0,room);const w=cut.lastIndexOf('-');nm=(w>room/2?cut.slice(0,w):cut).replace(/-+$/,'');}
+  return (nm?head+'_'+nm:head)+'.pdf';
 }
 async function downloadPdf(d){
   if(!window.jspdf){toast("Le générateur de PDF n'a pas pu se charger. Recharge la page.");return;}

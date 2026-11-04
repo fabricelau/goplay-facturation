@@ -1,7 +1,7 @@
 {
-  "version": "1.8.1",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.8.1.zip",
+  "version": "1.8.2",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.8.2.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Les nouvelles versions apparaissent tout de suite avec « Vérifier à nouveau ».\nNouvelle facture : choix Facture ou Facture d'acompte, bouton « Déduire un acompte ».\nFacture de solde : total du devis, acompte déduit et montant restant.\nMenu Avoirs, couleur pastel par devis."
+  "changelog": "Noms des PDF compatibles Chorus Pro (50 caractères maximum, sans accents ni espaces)."
 }
