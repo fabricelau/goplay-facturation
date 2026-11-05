@@ -526,6 +526,8 @@ function canReopen(d){
   const all=S.allDocs||S.docs;
   return !all.some(x=>x.id!==d.id&&((x.lignes||[]).some(l=>l.acompteRef===d.id)||(x.type==='avoir'&&x.factureId===d.id)));
 }
+/* card payment link on the PDF too, or only in the e-mail (setting) */
+const linkOnPdf=d=>d.type==='facture'&&!!d.lienPaiement&&S.settings.lienSurPdf!==false;
 const sentByMail=d=>(d.envois||[]).length>0;
 const inCorrection=d=>!!(d&&d.numero&&d.statut==='brouillon');
 function newDoc(type,base={}){
@@ -767,6 +769,7 @@ function vParams(){
     ${f('delaiPaiement','Délai de paiement (jours, 0 = à réception)','number')}${f('validiteDevis','Validité des devis (jours)','number')}
     ${f('titulaire','Titulaire du compte (exactement comme sur ton RIB)','text','full')}${f('iban','IBAN')}${f('bic','BIC (facultatif)')}
     ${f('penalites','Pénalités de retard','text','full')}
+    <div class="field full"><label for="p-lienSurPdf">Lien de paiement par carte (SumUp)</label><select id="p-lienSurPdf" data-p="lienSurPdf"><option value="true" ${s.lienSurPdf!==false?'selected':''}>Sur le PDF de la facture et dans l'e-mail</option><option value="false" ${s.lienSurPdf===false?'selected':''}>Dans l'e-mail seulement (pas sur le PDF)</option></select><span class="hint">Les clients publics (Chorus Pro) n'ont jamais de lien de paiement, quel que soit ce choix.</span></div>
     <div class="field full"><label for="p-mentionsLibres">Mentions libres sur tous les documents (assurance, garanties…)</label><textarea id="p-mentionsLibres" data-p="mentionsLibres">${esc(s.mentionsLibres)}</textarea></div>
     <div class="field full"><label for="p-conditionsDevis">Conditions de réservation (imprimées sur les devis)</label><textarea id="p-conditionsDevis" data-p="conditionsDevis" style="min-height:150px">${esc(s.conditionsDevis)}</textarea><span class="hint">Une condition par ligne. Texte proposé à vérifier et adapter à tes vraies règles.</span></div>
   </div></div>
@@ -1191,7 +1194,7 @@ function paperHtml(d){
    </tbody></table>
    <div class="pp-tot">${(si=>si?`<div style="font-weight:600"><span>${esc(si.label)}</span><span class="r">${eur(si.gross)}</span></div>${si.deps.map(x=>`<div><span>Acompte déjà facturé${x.numero?' (n° '+esc(x.numero)+')':''}</span><span class="r">−${eur(x.mt)}</span></div>`).join('')}<div style="border-bottom:1px solid var(--paper-line);margin-bottom:6px;padding-bottom:4px"></div>`:'')(soldeInfo(d))}<div><span>Total HT</span><span class="r">${eur(t.ht)}</span></div>${fr?'':t.tvas.map(x=>`<div><span>TVA ${fmtTaux(x.taux)} sur ${fmtNum(x.base)}</span><span class="r">${eur(x.montant)}</span></div>`).join('')}
    <div class="g"><span>${d.type==='avoir'?'Total avoir TTC':soldeInfo(d)?'Montant restant à payer TTC':'Total TTC'}</span><span class="r">${eur(d.type==='avoir'?-t.ttc:t.ttc)}</span></div>${acompteDemande(d)?`<div style="font-weight:600;color:var(--paper-accent)"><span>Acompte à verser (${fmtNum(acompteDemande(d).pct,0)} %)</span><span class="r">${eur(acompteDemande(d).mt)}</span></div>`:''}</div>
-   ${d.type==='facture'&&d.lienPaiement?`<div class="pp-pay"><b>Payer par carte :</b> <a href="${esc(d.lienPaiement)}" target="_blank" rel="noopener" style="color:var(--paper-accent)">${esc(d.lienPaiement)}</a></div>`:''}
+   ${linkOnPdf(d)?`<div class="pp-pay"><b>Payer par carte :</b> <a href="${esc(d.lienPaiement)}" target="_blank" rel="noopener" style="color:var(--paper-accent)">${esc(d.lienPaiement)}</a></div>`:''}
    ${d.type==='facture'&&virLines(d,s).length?`<div class="pp-ment" style="margin-top:10px;color:var(--paper-ink)"><b>Par virement</b>${virLines(d,s).map(x=>'<br>'+esc(x)).join('')}</div>`:''}
    ${d.notes?`<p style="margin-top:12px">${esc(d.notes).replace(/\n/g,'<br>')}</p>`:''}
    ${d.type==='devis'&&d.lienDevis?`<div class="pp-pay"><b>${d.acompteDemande&&HOSTED&&window.GPF.sumup?"Accepter ce devis et régler l'acompte en ligne":'Accepter ce devis en ligne'} :</b> <a href="${esc(d.lienDevis)}" target="_blank" rel="noopener" style="color:var(--paper-accent)">${esc(d.lienDevis)}</a></div>`:''}
@@ -1260,7 +1263,7 @@ function buildPdf(d,fx){
   p.setDrawColor(...INK);p.setLineWidth(.4);p.line(tx,y-2,W-M,y-2);p.setLineWidth(.2);y+=3;
   txt(d.type==='avoir'?'Total avoir TTC':si?'Montant restant à payer TTC':'Total TTC',tx,y,{b:1,s:si?10:11});txt(eur(d.type==='avoir'?-t.ttc:t.ttc),W-M,y,{b:1,s:11,a:'right'});y+=10;
   const adm=acompteDemande(d);if(adm){y-=4;txt(`Acompte à verser (${fmtNum(adm.pct,0)} %)`,tx,y,{b:1,s:9.5,c:ACC});txt(eur(adm.mt),W-M,y,{b:1,s:9.5,c:ACC,a:'right'});y+=8;}
-  if(d.type==='facture'&&d.lienPaiement){
+  if(linkOnPdf(d)){
     const url=d.lienPaiement;p.setFont(FF,'normal');p.setFontSize(9);const ul=p.splitTextToSize(url,W-2*M-8);const bh=4.2+ul.length*4.2+4;
     if(y+bh>280){p.addPage();y=20;}
     p.setDrawColor(...ACC);p.setLineDashPattern([1,1],0);p.roundedRect(M,y-4.5,W-2*M,bh,1.5,1.5);p.setLineDashPattern([],0);
@@ -1356,7 +1359,7 @@ function fxXml(d){
   const tit=s.titulaire||S.settings.titulaire||s.nom||'';
   let pm='';
   if(d.type!=='avoir'&&iban)pm=`<ram:SpecifiedTradeSettlementPaymentMeans><ram:TypeCode>58</ram:TypeCode><ram:Information>Virement SEPA</ram:Information><ram:PayeePartyCreditorFinancialAccount><ram:IBANID>${xe(iban)}</ram:IBANID>${tit?`<ram:AccountName>${xe(tit)}</ram:AccountName>`:''}</ram:PayeePartyCreditorFinancialAccount>${/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(bic)?`<ram:PayeeSpecifiedCreditorFinancialInstitution><ram:BICID>${bic}</ram:BICID></ram:PayeeSpecifiedCreditorFinancialInstitution>`:''}</ram:SpecifiedTradeSettlementPaymentMeans>`;
-  else if(d.type!=='avoir'&&d.lienPaiement)pm=`<ram:SpecifiedTradeSettlementPaymentMeans><ram:TypeCode>48</ram:TypeCode><ram:Information>Carte bancaire</ram:Information></ram:SpecifiedTradeSettlementPaymentMeans>`;
+  else if(d.type!=='avoir'&&linkOnPdf(d))pm=`<ram:SpecifiedTradeSettlementPaymentMeans><ram:TypeCode>48</ram:TypeCode><ram:Information>Carte bancaire</ram:Information></ram:SpecifiedTradeSettlementPaymentMeans>`;
   const taxes=t.tvas.map(x=>{const cc=cat(x.taux);return `<ram:ApplicableTradeTax><ram:CalculatedAmount>${fxA(cc==='E'?0:x.montant)}</ram:CalculatedAmount><ram:TypeCode>VAT</ram:TypeCode>${cc==='E'?`<ram:ExemptionReason>${xe(reason(x.taux))}</ram:ExemptionReason>`:''}<ram:BasisAmount>${fxA(x.base)}</ram:BasisAmount><ram:CategoryCode>${cc}</ram:CategoryCode>${(!fr&&s.tvaSurDebits&&cc==='S')?'<ram:DueDateTypeCode>5</ram:DueDateTypeCode>':''}<ram:RateApplicablePercent>${fxQ(fr?0:x.taux)}</ram:RateApplicablePercent></ram:ApplicableTradeTax>`;}).join('');
   const termTxt=d.type==='avoir'?`Avoir annulant ${d.avoirDe?'la facture '+d.avoirDe:'une facture'}.`:((legalLines(d).find(x=>/^Paiement /.test(x)))||'');
   const terms=(termTxt||(d.type!=='avoir'&&d.echeance))?`<ram:SpecifiedTradePaymentTerms>${termTxt?`<ram:Description>${xe(termTxt)}</ram:Description>`:''}${d.type!=='avoir'&&d.echeance?`<ram:DueDateDateTime><udt:DateTimeString format="102">${fxD(d.echeance)}</udt:DateTimeString></ram:DueDateDateTime>`:''}</ram:SpecifiedTradePaymentTerms>`:'';
