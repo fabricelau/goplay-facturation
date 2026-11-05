@@ -1165,7 +1165,10 @@ function legalLines(d){
     /* escompte, late-payment penalties and the 40 € fee are required between professionals only (C. com. L441-9) */
     const pro=!!(c&&c.type==='pro');
     out.push(`Paiement ${(+s.delaiPaiement||0)===0?'à réception':'à '+(+s.delaiPaiement)+' jours'} (échéance le ${fmtDate(d.echeance)}).${pro?" Pas d'escompte pour paiement anticipé.":''}`);
-    if(pro){const pen=String(s.penalites||"taux d'intérêt de la BCE majoré de 10 points").trim().replace(/\.$/,'');out.push(`En cas de retard de paiement : pénalités au ${pen.charAt(0).toLowerCase()+pen.slice(1)}.`);
+    /* public buyers: late-payment interest and the 40 € fee are set by the Code de la commande publique */
+    if(pro&&isChorus(d)){out.push("En cas de retard de paiement : intérêts moratoires au taux de la BCE majoré de 8 points (Code de la commande publique).");
+      out.push('Indemnité forfaitaire pour frais de recouvrement : 40 € (Code de la commande publique).');}
+    else if(pro){const pen=String(s.penalites||"taux d'intérêt de la BCE majoré de 10 points").trim().replace(/\.$/,'');out.push(`En cas de retard de paiement : pénalités au ${pen.charAt(0).toLowerCase()+pen.slice(1)}.`);
       out.push('Indemnité forfaitaire pour frais de recouvrement : 40 € (art. L441-10 du Code de commerce).');}
     out.push(`Nature de l'opération : ${NATURES[d.nature]||NATURES.services}.`);
     if(s.tvaSurDebits&&s.regimeTva!=='franchise')out.push("Option pour le paiement de la taxe d'après les débits.");
@@ -1339,7 +1342,7 @@ function fxXml(d){
   const reason=r=>fr?FRANCHISE:'Exonération de TVA';
   const type=d.type==='avoir'?'381':isAc(d)?'386':'380';
   const notes=[];
-  legalLines(d).forEach(x=>{const code=/indemnit[ée] forfaitaire/i.test(x)?'PMT':/p[ée]nalit[ée]s/i.test(x)?'PMD':/escompte/i.test(x)?'AAB':'';notes.push([x,code]);});
+  legalLines(d).forEach(x=>{const code=/indemnit[ée] forfaitaire/i.test(x)?'PMT':/p[ée]nalit[ée]s|int[ée]r[êe]ts moratoires/i.test(x)?'PMD':/escompte/i.test(x)?'AAB':'';notes.push([x,code]);});
   evtLines(d).forEach(x=>notes.push([x,'']));
   if(d.objet)notes.unshift(['Objet : '+d.objet,'']);
   const lines=[];let n=0;
