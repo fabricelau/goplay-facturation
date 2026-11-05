@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.11.1
+ * Version: 1.11.2
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.11.1');
+define('GPF_VERSION', '1.11.2');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -304,7 +304,8 @@ function gpf_update_info($force = false) {
     if (is_admin() && !empty($_GET['force-check'])) $force = true;
     $c = get_site_transient('gpf_update_info');
     if (!$force && is_array($c)) return $c;
-    $r = wp_remote_get(GPF_UPDATE_JSON, ['timeout' => 10, 'redirection' => 5, 'headers' => ['Accept' => 'application/json']]);
+    /* cache-buster: GitHub's CDN would otherwise serve a copy up to 5 minutes old */
+    $r = wp_remote_get(add_query_arg('t', time(), GPF_UPDATE_JSON), ['timeout' => 10, 'redirection' => 5, 'headers' => ['Accept' => 'application/json']]);
     $info = ['checked' => time(), 'ok' => false];
     if (!is_wp_error($r) && (int)wp_remote_retrieve_response_code($r) === 200) {
         $j = json_decode(wp_remote_retrieve_body($r), true);
