@@ -1,7 +1,7 @@
 {
-  "version": "1.11.0",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.11.0.zip",
+  "version": "1.11.1",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.11.1.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Réglage : lien de paiement par carte dans l'e-mail seulement (pas sur le PDF)."
+  "changelog": "Factures aux particuliers allégées : escompte, pénalités et indemnité de 40 € réservés aux professionnels.\nLien de paiement dans l'e-mail seulement (réglage)."
 }

@@ -1160,9 +1160,11 @@ function legalLines(d){
   const il=idLine(s);if(il)out.push((s.nom?s.nom+' · ':'')+il);
   if(s.regimeTva==='franchise')out.push('TVA non applicable, art. 293 B du CGI.');
   if(d.type==='facture'){
-    out.push(`Paiement ${(+s.delaiPaiement||0)===0?'à réception':'à '+(+s.delaiPaiement)+' jours'} (échéance le ${fmtDate(d.echeance)}). Pas d'escompte pour paiement anticipé.`);
-    out.push(`En cas de retard de paiement : pénalités au ${s.penalites||"taux d'intérêt de la BCE majoré de 10 points"}.`);
-    if(c&&c.type==='pro')out.push('Indemnité forfaitaire pour frais de recouvrement : 40 € (art. L441-10 du Code de commerce).');
+    /* escompte, late-payment penalties and the 40 € fee are required between professionals only (C. com. L441-9) */
+    const pro=!!(c&&c.type==='pro');
+    out.push(`Paiement ${(+s.delaiPaiement||0)===0?'à réception':'à '+(+s.delaiPaiement)+' jours'} (échéance le ${fmtDate(d.echeance)}).${pro?" Pas d'escompte pour paiement anticipé.":''}`);
+    if(pro){const pen=String(s.penalites||"taux d'intérêt de la BCE majoré de 10 points").trim().replace(/\.$/,'');out.push(`En cas de retard de paiement : pénalités au ${pen.charAt(0).toLowerCase()+pen.slice(1)}.`);
+      out.push('Indemnité forfaitaire pour frais de recouvrement : 40 € (art. L441-10 du Code de commerce).');}
     out.push(`Nature de l'opération : ${NATURES[d.nature]||NATURES.services}.`);
     if(s.tvaSurDebits&&s.regimeTva!=='franchise')out.push("Option pour le paiement de la taxe d'après les débits.");
     if(d.acompteDe)out.push(`Facture d'acompte sur le devis ${d.acompteDevisNumero||''}. Le solde fera l'objet d'une facture finale.`);
