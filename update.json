@@ -1,7 +1,7 @@
 {
-  "version": "1.11.2",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.11.2.zip",
+  "version": "1.11.3",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.11.3.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Factures aux particuliers allégées (escompte, pénalités et 40 € réservés aux pros).\nLien de paiement dans l'e-mail seulement (réglage).\nMises à jour repérées immédiatement."
+  "changelog": "Client public Chorus : plus de lien de paiement dans l'aperçu, le PDF et l'e-mail, même en correction.\nFactures aux particuliers allégées.\nLien de paiement dans l'e-mail seulement (réglage)."
 }

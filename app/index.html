@@ -527,7 +527,9 @@ function canReopen(d){
   return !all.some(x=>x.id!==d.id&&((x.lignes||[]).some(l=>l.acompteRef===d.id)||(x.type==='avoir'&&x.factureId===d.id)));
 }
 /* card payment link on the PDF too, or only in the e-mail (setting) */
-const linkOnPdf=d=>d.type==='facture'&&!!d.lienPaiement&&S.settings.lienSurPdf!==false;
+/* public clients never get a card link, even before the invoice is (re)validated */
+const payLink=d=>d&&d.type==='facture'&&!isChorus(d)?(d.lienPaiement||''):'';
+const linkOnPdf=d=>!!payLink(d)&&S.settings.lienSurPdf!==false;
 const sentByMail=d=>(d.envois||[]).length>0;
 const inCorrection=d=>!!(d&&d.numero&&d.statut==='brouillon');
 function newDoc(type,base={}){
@@ -955,7 +957,7 @@ function formHtml(d){
     <div class="add-row"><button class="btn" id="e-addline">+ Ligne libre</button>${S.formules.length?`<select id="e-addform"><option value="">+ Formule…</option>${[...S.formules].sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(f=>`<option value="${f.id}">${esc(f.nom)}</option>`).join('')}</select>`:''}<button class="btn" id="e-remise">+ Remise</button>${d.type==='facture'&&!isAc(d)&&d.clientId&&freeDepositsOf(d.clientId,d.id).filter(a=>!(d.lignes||[]).some(l=>l.acompteRef===a.id)).length?`<button class="btn" id="e-deduct">− Déduire un acompte</button>`:''}${S.articles.length?`<select id="e-addart"><option value="">+ Depuis le catalogue…</option>${[...S.articles].sort((a,b)=>(a.designation||'').localeCompare(b.designation||'')).map(a=>`<option value="${a.id}">${esc(a.designation)} · ${eur(+a.pu||0)}</option>`).join('')}</select>`:`<a class="btn ghost sm" href="#catalogue" id="e-tocat">Créer un catalogue</a>`}</div>
     <div class="totals" id="e-totals"></div></div>
   <div class="panel"><div class="form">
-    ${d.type==='facture'?`<div class="field full"><label for="e-lien">Lien de paiement SumUp (facultatif)</label><input type="url" id="e-lien" data-f="lienPaiement" value="${esc(d.lienPaiement)}" placeholder="https://pay.sumup.com/…"><span class="hint">Crée le lien dans ton appli SumUp et colle-le ici : il apparaîtra sur la facture pour un paiement par carte.</span></div>`:''}
+    ${d.type==='facture'&&!isChorus(d)?`<div class="field full"><label for="e-lien">Lien de paiement SumUp (facultatif)</label><input type="url" id="e-lien" data-f="lienPaiement" value="${esc(d.lienPaiement)}" placeholder="https://pay.sumup.com/…"><span class="hint">Crée le lien dans ton appli SumUp et colle-le ici : il apparaîtra sur la facture pour un paiement par carte.</span></div>`:''}
     ${d.type==='devis'?`<div class="field full"><label style="display:flex;align-items:center;gap:8px;color:var(--ink);font-size:14px;font-weight:500"><input type="checkbox" id="e-acDem" ${d.acompteDemande?'checked':''} style="width:18px;height:18px"> Acompte à verser à la réservation</label>
       <div class="row" id="e-acRow" ${d.acompteDemande?'':'hidden'}><input type="number" min="1" max="100" step="1" id="e-acPct" value="${esc(d.acomptePct||30)}" style="width:90px" aria-label="Pourcentage d'acompte"><span>%</span><span class="muted num" id="e-acMt"></span></div></div>`:''}
     <div class="field full"><label for="e-notes">Notes pour le client</label><textarea id="e-notes" data-f="notes" placeholder="${d.type==='devis'?'Ex. Acompte de 30 % à la commande':'Ex. Merci pour votre confiance'}">${esc(d.notes)}</textarea></div>
@@ -1699,7 +1701,7 @@ function mailVars(d){
     session:d.evtDate?` pour la session du ${fmtDate(d.evtDate)}${d.evtHeure?' à '+d.evtHeure.replace(':','h'):''}`:'',validite:fmtDate(d.validite),echeance:fmtDate(d.echeance),
     lien_devis:d.lienDevis?`${signLabel(d)}, cliquez sur ce lien :\n${d.lienDevis}`:'',
     acompte:a?`Un acompte de ${fmtNum(a.pct,0)} %, soit ${eur(a.mt)} TTC, est à verser à la réservation.`:'',
-    paiement:[d.lienPaiement?`Pour payer par carte bancaire, cliquez sur ce lien :\n${d.lienPaiement}`:'',virLines(d).length?`${d.lienPaiement?'Ou par virement':'Pour payer par virement'} :\n${virLines(d).join('\n')}`:''].filter(Boolean).join('\n\n'),
+    paiement:[payLink(d)?`Pour payer par carte bancaire, cliquez sur ce lien :\n${payLink(d)}`:'',virLines(d).length?`${payLink(d)?'Ou par virement':'Pour payer par virement'} :\n${virLines(d).join('\n')}`:''].filter(Boolean).join('\n\n'),
     type_doc:isAc(d)?"Facture d'acompte":'Facture',la_facture:isAc(d)?"la facture d'acompte":'la facture',
     date_envoi:fmtDate(((d.envois||[]).find(x=>!/relance/.test(x.kind||''))||{}).date||d.date),
     signature:['Cordialement,',s.nom,s.tel,s.email].filter(Boolean).join('\n')};
@@ -1714,8 +1716,8 @@ function mailTemplate(d,kind){
     const block=`${signLabel(d)}, cliquez sur ce lien :\n${d.lienDevis}`;
     const sig=v.signature&&body.lastIndexOf(v.signature);
     body=sig>0?body.slice(0,sig).trimEnd()+'\n\n'+block+'\n\n'+body.slice(sig):body+'\n\n'+block;}
-  if(d.type==='facture'&&d.lienPaiement&&!body.includes(d.lienPaiement)){
-    const block=`Pour payer par carte bancaire, cliquez sur ce lien :\n${d.lienPaiement}`;
+  if(payLink(d)&&!body.includes(payLink(d))){
+    const block=`Pour payer par carte bancaire, cliquez sur ce lien :\n${payLink(d)}`;
     const sig=v.signature&&body.lastIndexOf(v.signature);
     body=sig>0?body.slice(0,sig).trimEnd()+'\n\n'+block+'\n\n'+body.slice(sig):body+'\n\n'+block;}
   return {subject:fillTpl(tp.sujet,v),body};
