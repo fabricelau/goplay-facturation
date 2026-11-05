@@ -497,8 +497,11 @@ const realIssued=type=>(S.allDocs||S.docs).filter(d=>d.type===type&&d.seq&&!d.te
 function nextSeq(type){
   const start=S.settings.modeTest?1:+S.settings[{devis:'debutDevis',facture:'debutFacture',avoir:'debutAvoir'}[type]]||1;
   const max=Math.max(0,...S.docs.filter(d=>d.type===type&&d.seq).map(d=>+d.seq));
+  /* numbers already used in another software (e.g. SumUp invoices) are never reused */
+  const ext=S.settings.modeTest?0:+S.settings[{facture:'extFacture',avoir:'extAvoir'}[type]]||0;
   /* invoices and credit notes must follow each other without gaps: once one is issued, the start number no longer applies */
-  if(!S.settings.modeTest&&type!=='devis'&&max>0)return max+1;
+  if(!S.settings.modeTest&&type!=='devis'&&max>0)return Math.max(max,ext)+1;
+  if(ext)return Math.max(start,max+1,ext+1);
   return Math.max(start,max+1);
 }
 function makeNumero(type,seq,date){
@@ -766,6 +769,8 @@ function vParams(){
     ${f('prefixeFacture','Préfixe des factures')}${f('debutFacture','Prochain n° de facture','number')}
     ${f('prefixeDevis','Préfixe des devis')}${f('debutDevis','Prochain n° de devis','number')}
     ${f('prefixeAvoir','Préfixe des avoirs')}${f('debutAvoir','Prochain n° d\'avoir','number')}
+    <div class="field full"><span class="hint"><b>Tu factures aussi ailleurs (SumUp…) avec la même numérotation ?</b> Indique le dernier numéro utilisé là-bas : l'outil continuera après, pour ne jamais créer de doublon.</span></div>
+    ${f('extFacture','Dernière facture émise dans un autre logiciel (n°)','number')}${f('extAvoir','Dernier avoir émis dans un autre logiciel (n°)','number')}
     <div class="field"><label for="p-annee">Inclure l'année</label><select id="p-annee" data-p="annee"><option value="true" ${s.annee?'selected':''}>Oui</option><option value="false" ${!s.annee?'selected':''}>Non</option></select></div>
     <div class="field"><label>Exemple</label><div class="num" style="padding:8px 0">${esc(makeNumero('facture',nextSeq('facture'),today()))}</div></div>
   </div></div>

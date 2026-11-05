@@ -1,7 +1,7 @@
 {
-  "version": "1.11.5",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.11.5.zip",
+  "version": "1.12.0",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.12.0.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Bouton « Marquer comme déposée sur Chorus Pro ».\nBoutons longs sur deux lignes au lieu de déborder.\nClients publics : intérêts moratoires BCE + 8 points."
+  "changelog": "Numérotation commune avec SumUp : l'outil continue après le dernier numéro utilisé là-bas, sans doublon.\nDépôt Chorus Pro noté sur la facture."
 }

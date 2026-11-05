@@ -1,5 +1,5 @@
 === Goplay Arena Facturation ===
-Version : 1.11.5
+Version : 1.12.0
 
 Outil de devis et factures de GB GLOBAL (Goplay Arena), accessible sur /facturation.
 Réservé aux administrateurs WordPress du site.
