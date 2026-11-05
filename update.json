@@ -1,7 +1,7 @@
 {
-  "version": "1.11.4",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.11.4.zip",
+  "version": "1.11.5",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.11.5.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Clients publics : intérêts moratoires BCE + 8 points (Code de la commande publique), plus de lien carte même en correction.\nFactures aux particuliers allégées.\nLien de paiement dans l'e-mail seulement (réglage)."
+  "changelog": "Bouton « Marquer comme déposée sur Chorus Pro ».\nBoutons longs sur deux lignes au lieu de déborder.\nClients publics : intérêts moratoires BCE + 8 points."
 }

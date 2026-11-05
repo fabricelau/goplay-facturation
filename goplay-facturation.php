@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.11.4
+ * Version: 1.11.5
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.11.4');
+define('GPF_VERSION', '1.11.5');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -424,6 +424,7 @@ function gpf_can_reopen($old, $id, $motif = '') {
     if (!empty($old['paiement'])) return false;
     /* already e-mailed: only for a public client, who can receive invoices through Chorus Pro only */
     if (!empty($old['envois']) && $motif !== 'chorus-email') return false;
+    foreach ((array)($old['envois'] ?? []) as $e) if (($e['kind'] ?? '') === 'chorus') return false;
     foreach (gpf_all('docs') as $r) {
         if ($r['id'] === $id) continue;
         $x = json_decode($r['data'], true);
