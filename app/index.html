@@ -1088,7 +1088,7 @@ function bindRo(ed){
     if(a==='godevis'){const dv=S.docs.find(x=>x.id===(d.devisId||d.acompteDe));if(dv)openEditor(JSON.parse(JSON.stringify(dv)));else toast('Ce devis est introuvable');}
     if(a==='gofacture'){const f=S.docs.find(x=>x.id===d.factureId);if(f)openEditor(JSON.parse(JSON.stringify(f)));}
     if(a==='avoir')createAvoir(d);
-    if(a==='dup'){const n=newDoc(d.type==='avoir'?'facture':d.type,{...evtOf(d),clientId:d.clientId,objet:d.objet,saisie:d.saisie||'ht',lignes:d.lignes.map(l=>({...l,id:uid()})),notes:d.notes,nature:d.nature});openEditor(n);}
+    if(a==='dup'){const n=newDoc(d.type==='avoir'?'facture':d.type,{...evtOf(d),clientId:d.clientId,objet:d.objet,saisie:d.saisie||'ht',lignes:d.lignes.filter(l=>!l.acompteRef).map(l=>({...l,id:uid()})),notes:d.notes,nature:d.nature,...(d.engagement?{engagement:d.engagement}:{}),...(d.codeService?{codeService:d.codeService}:{})});openEditor(n);toast('Copie créée en brouillon : vérifie-la puis émets-la');}
     if(a==='paid')payForm(d);
     if(a==='acompte')acompteForm(d);
     if(a==='cancelq'){
