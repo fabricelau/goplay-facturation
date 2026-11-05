@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.10.0
+ * Version: 1.10.1
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.10.0');
+define('GPF_VERSION', '1.10.1');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -418,9 +418,11 @@ function gpf_too_many() {
 
 /* Issued documents are locked: only follow-up fields may change.        */
 /* An issued invoice or credit note can be reopened for correction only while nothing has left. */
-function gpf_can_reopen($old, $id) {
+function gpf_can_reopen($old, $id, $motif = '') {
     if (!in_array($old['type'] ?? '', ['facture', 'avoir'], true) || !in_array($old['statut'] ?? '', ['emise', 'emis'], true)) return false;
-    if (!empty($old['paiement']) || !empty($old['envois'])) return false;
+    if (!empty($old['paiement'])) return false;
+    /* already e-mailed: only for a public client, who can receive invoices through Chorus Pro only */
+    if (!empty($old['envois']) && $motif !== 'chorus-email') return false;
     foreach (gpf_all('docs') as $r) {
         if ($r['id'] === $id) continue;
         $x = json_decode($r['data'], true);
@@ -438,9 +440,10 @@ function gpf_check_doc_write($id, &$new) {
         $hist = (array)($old['corrections'] ?? []);
         if (($old['statut'] ?? '') === 'brouillon') { if ($hist) $new['corrections'] = $hist; else unset($new['corrections']); return null; }
         if (($new['statut'] ?? '') === 'brouillon') {
-            if (!gpf_can_reopen($old, $id)) return new WP_Error('locked', 'Cette facture a déjà été envoyée, payée ou utilisée : corrige-la avec un avoir.', ['status' => 409]);
+            $motif = is_array($new['reouverture'] ?? null) ? (string)($new['reouverture']['motif'] ?? '') : '';
+            if (!gpf_can_reopen($old, $id, $motif)) return new WP_Error('locked', 'Cette facture a déjà été envoyée, payée ou utilisée : corrige-la avec un avoir.', ['status' => 409]);
             $prev = $old; unset($prev['corrections']);
-            $hist[] = ['date' => gmdate('c'), 'user' => get_current_user_id(), 'avant' => $prev];
+            $hist[] = ['date' => gmdate('c'), 'user' => get_current_user_id(), 'motif' => $motif ?: 'non-envoyee', 'avant' => $prev];
             $new = $prev; $new['statut'] = 'brouillon'; $new['corrections'] = $hist;
             return null;
         }

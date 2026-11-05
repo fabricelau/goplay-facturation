@@ -1,7 +1,7 @@
 {
-  "version": "1.10.0",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.10.0.zip",
+  "version": "1.10.1",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.10.1.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "« Corriger (pas encore envoyée) » : corrige une facture non envoyée en gardant son numéro et sa date, avec historique.\nClients publics Chorus Pro : virement seulement, SIRET, code service, n° d'engagement."
+  "changelog": "Correction possible d'une facture envoyée par e-mail à un organisme public pas encore déposée sur Chorus Pro (confirmation et historique)."
 }

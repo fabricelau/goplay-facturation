@@ -522,10 +522,11 @@ const isChorus=d=>!!(d&&((d.client&&d.client.chorus)||((!d.numero||d.statut==='b
 /* an issued invoice or credit note can be reopened only while nothing has left: not sent, not paid, not used elsewhere */
 function canReopen(d){
   if(!d||!d.numero||!['facture','avoir'].includes(d.type)||!['emise','emis'].includes(d.statut))return false;
-  if(d.paiement||(d.envois||[]).length)return false;
+  if(d.paiement)return false;
   const all=S.allDocs||S.docs;
   return !all.some(x=>x.id!==d.id&&((x.lignes||[]).some(l=>l.acompteRef===d.id)||(x.type==='avoir'&&x.factureId===d.id)));
 }
+const sentByMail=d=>(d.envois||[]).length>0;
 const inCorrection=d=>!!(d&&d.numero&&d.statut==='brouillon');
 function newDoc(type,base={}){
   const d={id:uid(),type,statut:'brouillon',...(S.settings.modeTest?{test:true}:{}),saisie:S.settings.saisiePrix==='ttc'?'ttc':'ht',date:today(),clientId:'',client:null,objet:'',nature:'services',lignes:[],notes:'',lienPaiement:'',createdAt:new Date().toISOString(),...base};
@@ -1039,7 +1040,7 @@ async function emit(){
 function roActions(d){
   const t=totals(d);const st=statusOf(d);
   let main='';
-  const reopen=canReopen(d)?`<button class="btn" data-act="reopen">Corriger (pas encore envoyée)</button>`:'';
+  const reopen=canReopen(d)?`<button class="btn" data-act="reopen">${sentByMail(d)?'Corriger (client public, pas encore sur Chorus)':'Corriger (pas encore envoyée)'}</button>`:'';
   if(d.type==='devis'){
     if(d.statut==='emis')main=`<button class="btn" data-act="sent">Marquer comme envoyé</button>`;
     if(d.statut==='envoye'||d.statut==='emis')main+=`<button class="btn ${d.statut==='envoye'?'primary':''}" data-act="accepte">Marquer accepté</button><button class="btn" data-act="refuse">Marquer refusé</button>`;
@@ -1088,9 +1089,9 @@ function bindRo(ed){
     if(a==='mksign'){const tk=payToken();const nd={...d,signToken:tk,lienDevis:window.GPF.quoteBase+tk+'/'};await safe(()=>put('docs',nd),'Lien de signature créé');S.edit=nd;renderEditor();}
     if(a==='copysign'){const v=$('#ro-signlink').value;try{await navigator.clipboard.writeText(v);toast('Lien copié');}catch(e){const i=$('#ro-signlink');i.focus();i.select();toast('Sélectionne le lien et copie-le');}}
     if(a==='reopen'){
-      const ok2=await new Promise(res=>openModal(`<div class="panel-h"><h2>Corriger ${esc(d.numero)} ?</h2></div><div class="body" style="display:flex;flex-direction:column;gap:10px"><p style="margin:0">La facture redevient modifiable. Elle garde son numéro et sa date, et l'ancienne version est conservée dans l'historique.</p><label class="row" style="gap:8px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="ro-sure" style="width:18px;height:18px;margin-top:2px"> <span>Je confirme que le client <b>ne l'a pas reçue</b> : ni par e-mail, ni sur Chorus Pro, ni en main propre.</span></label></div><div class="foot"><button class="btn" data-a="no">Annuler</button><button class="btn primary" data-a="ok">Corriger</button></div>`,dl=>dl.addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(!b)return;if(b.dataset.a==='ok'&&!$('#ro-sure',dl).checked){toast('Coche la case pour confirmer');return;}closeModal();res(b.dataset.a==='ok');})));
+      const ok2=await new Promise(res=>openModal(`<div class="panel-h"><h2>Corriger ${esc(d.numero)} ?</h2></div><div class="body" style="display:flex;flex-direction:column;gap:10px"><p style="margin:0">La facture redevient modifiable. Elle garde son numéro et sa date, et l'ancienne version est conservée dans l'historique.</p><label class="row" style="gap:8px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="ro-sure" style="width:18px;height:18px;margin-top:2px"> <span>${sentByMail(d)?`Ce client est un <b>organisme public</b> : il ne peut recevoir une facture que par Chorus Pro. La version envoyée par e-mail le ${fmtDate(d.envois[0].date)} n'a <b>pas été déposée sur Chorus Pro</b> et sera remplacée par la version corrigée.`:`Je confirme que le client <b>ne l'a pas reçue</b> : ni par e-mail, ni sur Chorus Pro, ni en main propre.`}</span></label></div><div class="foot"><button class="btn" data-a="no">Annuler</button><button class="btn primary" data-a="ok">Corriger</button></div>`,dl=>dl.addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(!b)return;if(b.dataset.a==='ok'&&!$('#ro-sure',dl).checked){toast('Coche la case pour confirmer');return;}closeModal();res(b.dataset.a==='ok');})));
       if(!ok2)return;
-      const nd={...d,statut:'brouillon'};await safe(()=>put('docs',nd),'Facture rouverte pour correction');S.edit=JSON.parse(JSON.stringify(nd));S.edTab='form';renderEditor();return;}
+      const nd={...d,statut:'brouillon',...(sentByMail(d)?{reouverture:{motif:'chorus-email'}}:{})};await safe(()=>put('docs',nd),'Facture rouverte pour correction');delete nd.reouverture;S.edit=JSON.parse(JSON.stringify(nd));S.edTab='form';renderEditor();return;}
     if(a==='rmlink'){if(!await confirmBox('Retirer le paiement par carte ?',"Le lien de paiement disparaît de la facture et des prochains e-mails. Télécharge ensuite à nouveau le PDF : il ne demandera plus que le virement.",'Retirer'))return;const nd={...d,lienPaiement:'',payToken:''};await safe(()=>put('docs',nd),'Lien de paiement retiré');S.edit=nd;renderEditor();}
     if(a==='mklink'){const tk=payToken();const nd={...d,payToken:tk,lienPaiement:window.GPF.payBase+tk+'/'};await safe(()=>put('docs',nd),'Lien de paiement créé');S.edit=nd;renderEditor();}
     if(a==='copylink'){const v=$('#ro-paylink').value;try{await navigator.clipboard.writeText(v);toast('Lien copié');}catch(e){const i=$('#ro-paylink');i.focus();i.select();toast('Sélectionne le lien et copie-le');}}
