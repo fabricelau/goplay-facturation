@@ -1,7 +1,7 @@
 {
-  "version": "1.12.1",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.12.1.zip",
+  "version": "1.12.2",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.12.2.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Dupliquer une facture reprend aussi le n° d'engagement et le code service.\nNumérotation commune avec SumUp, sans doublon."
+  "changelog": "Mode test : plus de grand « TEST » au milieu des factures."
 }

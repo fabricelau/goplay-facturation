@@ -1198,7 +1198,7 @@ function paperHtml(d){
   const s=d.entreprise||S.settings;const c=d.client&&locked(d)?d.client:snapshotClient(clientById(d.clientId));const t=totals(d);const fr=s.regimeTva==='franchise';
   const ttl=isAc(d)?"FACTURE D'ACOMPTE":{devis:'DEVIS',facture:'FACTURE',avoir:'AVOIR'}[d.type];
   const lines=(d.lignes||[]).filter(l=>l.designation||hasPrice(l));
-  return `<div class="pp">${d.statut==='brouillon'?'<div class="pp-wm">BROUILLON</div>':d.test?'<div class="pp-wm">TEST</div>':''}
+  return `<div class="pp">${d.statut==='brouillon'?'<div class="pp-wm">BROUILLON</div>':''}
    <div class="pp-top"><div class="pp-co">${S.settings.logo?`<img class="pp-logo" src="${S.settings.logo}" alt="">`:''}<b>${esc(s.nom||'Nom de ton entreprise')}</b>${coLines(s).map(esc).join('<br>')}</div>
    <div class="pp-title"><h4>${ttl}</h4><div class="n">${esc(d.numero||'N° attribué à l\'émission')}</div><div>Date : ${fmtDate(d.date)}</div>${d.type==='facture'?`<div>Échéance : ${fmtDate(d.echeance)}</div>`:''}${d.type==='devis'?`<div>Validité : ${fmtDate(d.validite)}</div>`:''}</div></div>
    <div class="pp-cl"><b>${esc(c?c.nom:'Client')}</b><br>${clLines(c).map(esc).join('<br>')}</div>
@@ -1233,7 +1233,7 @@ function buildPdf(d,fx){
   const ACC=[10,107,96],INK=[27,31,30],MUT=[107,116,113],LINE=[218,223,221];
   const W=210,M=16;let y=18;
   const txt=(str,x,yy,o={})=>{p.setFont(FF,o.b?'bold':'normal');p.setFontSize(o.s||9);p.setTextColor(...(o.c||INK));p.text(String(str),x,yy,o.a?{align:o.a}:undefined);};
-  if(d.statut==='brouillon'||d.test){p.setFont(FF,'bold');p.setFontSize(70);p.setTextColor(235,238,237);p.text(d.statut==='brouillon'?'BROUILLON':'TEST',105,170,{align:'center',angle:25});}
+  if(d.statut==='brouillon'){p.setFont(FF,'bold');p.setFontSize(70);p.setTextColor(235,238,237);p.text('BROUILLON',105,170,{align:'center',angle:25});}
   const L=S.settings;if(L.logo&&L.logoW&&L.logoH){try{const r=Math.min(45/L.logoW,18/L.logoH);const w=L.logoW*r,h=L.logoH*r;p.addImage(L.logo,L.logo.startsWith('data:image/png')?'PNG':'JPEG',M,y-6,w,h);y+=h-1;}catch(e){console.warn(e);}}
   txt(s.nom||'',M,y,{b:1,s:13});let yy=y+5;p.setFont(FF,'normal');p.setFontSize(8.5);coLines(s).forEach(l=>p.splitTextToSize(l,88).forEach(x=>{txt(x,M,yy,{c:MUT,s:8.5});yy+=4;}));
   const ttl=isAc(d)?"FACTURE D'ACOMPTE":{devis:'DEVIS',facture:'FACTURE',avoir:'AVOIR'}[d.type];
