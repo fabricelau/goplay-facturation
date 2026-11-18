@@ -1,7 +1,7 @@
 {
-  "version": "1.12.2",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.12.2.zip",
+  "version": "1.12.3",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.12.3.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Mode test : plus de grand « TEST » au milieu des factures."
+  "changelog": "Mode test : numéro du document de test au choix, et plus de grand « TEST » au milieu."
 }
