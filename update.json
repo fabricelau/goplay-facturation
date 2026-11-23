@@ -1,7 +1,7 @@
 {
-  "version": "1.13.3",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.13.3.zip",
+  "version": "1.14.0",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.14.0.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Fiche client : « + Ajouter un e-mail ». À l'envoi, cases à cocher pour choisir les destinataires. Conditions une par case."
+  "changelog": "Mises à jour instantanées depuis GitHub (moins d'une minute), sinon vérification toutes les heures."
 }

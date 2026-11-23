@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.13.3
+ * Version: 1.14.0
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.13.3');
+define('GPF_VERSION', '1.14.0');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -73,6 +73,7 @@ add_action('init', function () { if (get_option('gpf_version') !== GPF_VERSION) 
 register_deactivation_hook(__FILE__, function () {
     flush_rewrite_rules();
     wp_clear_scheduled_hook('gpf_daily');
+    wp_clear_scheduled_hook('gpf_update_tick');
 });
 
 /* ------------------------------------------------------------------ */
@@ -350,6 +351,38 @@ add_filter('auto_update_plugin', function ($update, $item) {
     return $update;
 }, 10, 2);
 add_action('upgrader_process_complete', function () { delete_site_transient('gpf_update_info'); });
+
+/* Instant updates: GitHub calls /wp-json/gpf/v1/github-push after each push (webhook).
+   The call carries no trust: it only makes the site re-read update.json from the fixed
+   GitHub address and install that package, exactly like the twice-daily check. */
+function gpf_pull_update() {
+    $info = gpf_update_info(true);
+    update_option('gpf_last_pull', ['t' => time(), 'v' => $info['version'] ?? ''], false);
+    if (empty($info['ok']) || !version_compare($info['version'], GPF_VERSION, '>')) return;
+    if (gpf_opt('autoupdate', 'on') === 'off') return;
+    require_once ABSPATH . 'wp-admin/includes/admin.php';
+    require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    delete_site_transient('update_plugins');
+    wp_update_plugins();
+    /* WordPress's own automatic updater: keeps the plugin active and rolls back if the site breaks. */
+    if (function_exists('wp_maybe_auto_update')) wp_maybe_auto_update();
+}
+add_action('gpf_pull_update', 'gpf_pull_update');
+add_action('gpf_update_tick', 'gpf_pull_update');
+/* Safety net if the webhook is missing: look at GitHub every hour. */
+add_action('init', function () { if (!wp_next_scheduled('gpf_update_tick')) wp_schedule_event(time() + 600, 'hourly', 'gpf_update_tick'); }, 30);
+add_action('rest_api_init', function () {
+    register_rest_route('gpf/v1', '/github-push', ['methods' => 'POST', 'permission_callback' => '__return_true', 'callback' => function ($req) {
+        if (!gpf_throttle('github-push')) return new WP_REST_Response(['ok' => false, 'message' => 'trop de demandes'], 429);
+        $ev = (string)$req->get_header('x_github_event');
+        if ($ev === 'ping') return new WP_REST_Response(['ok' => true, 'message' => 'pong'], 200);
+        update_option('gpf_last_push', time(), false);
+        if (!wp_next_scheduled('gpf_pull_update')) wp_schedule_single_event(time(), 'gpf_pull_update');
+        if (defined('DISABLE_WP_CRON') && DISABLE_WP_CRON) { ignore_user_abort(true); gpf_pull_update(); }
+        elseif (function_exists('spawn_cron')) spawn_cron();
+        return new WP_REST_Response(['ok' => true, 'installed' => GPF_VERSION], 202);
+    }]);
+});
 add_action('admin_post_gpf_check_update', function () {
     if (!current_user_can('update_plugins') || !check_admin_referer('gpf_check_update')) wp_die('Accès refusé', '', ['response' => 403]);
     gpf_update_info(true);
@@ -1119,7 +1152,8 @@ function gpf_settings_page() {
         <table class="form-table">
           <tr><th>Mises à jour automatiques</th><td><label><input type="checkbox" name="gpf_options[autoupdate]" value="1" <?php checked(gpf_opt('autoupdate', 'on') !== 'off'); ?>> Installer toute seule chaque nouvelle version (recommandé)</label>
             <?php $ui = get_site_transient('gpf_update_info'); ?>
-            <p class="description">Version installée : <b><?php echo esc_html(GPF_VERSION); ?></b><?php if (is_array($ui) && !empty($ui['ok'])): ?> · dernière version disponible : <b><?php echo esc_html($ui['version']); ?></b><?php endif; ?>. WordPress vérifie deux fois par jour ; tes données ne sont jamais touchées par une mise à jour.</p>
+            <p class="description">Version installée : <b><?php echo esc_html(GPF_VERSION); ?></b><?php if (is_array($ui) && !empty($ui['ok'])): ?> · dernière version disponible : <b><?php echo esc_html($ui['version']); ?></b><?php endif; ?>. Chaque nouvelle version publiée sur GitHub s'installe en moins d'une minute (sinon au plus tard dans l'heure) ; tes données ne sont jamais touchées par une mise à jour.</p>
+            <?php $lp = (int)get_option('gpf_last_push', 0); ?><p class="description">Adresse à donner à GitHub (webhook) : <code><?php echo esc_html(rest_url('gpf/v1/github-push')); ?></code><?php if ($lp): ?> · dernier signal de GitHub : <?php echo esc_html(wp_date('d/m/Y H:i', $lp)); ?><?php endif; ?></p>
             <?php if (($_GET['gpf_msg'] ?? '') === 'update_checked'): ?><p><b><?php echo (is_array($ui) && !empty($ui['ok'])) ? (version_compare($ui['version'], GPF_VERSION, '>') ? 'Nouvelle version ' . esc_html($ui['version']) . ' trouvée : elle sera installée automatiquement, ou tout de suite depuis Tableau de bord › Mises à jour.' : 'Tu as déjà la dernière version.') : 'Impossible de joindre le serveur des mises à jour pour le moment.'; ?></b></p><?php endif; ?>
             <p><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=gpf_check_update'), 'gpf_check_update')); ?>">Vérifier maintenant</a></p></td></tr>
         </table>
