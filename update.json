@@ -1,7 +1,7 @@
 {
-  "version": "1.13.2",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.13.2.zip",
+  "version": "1.13.3",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.13.3.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Réglages : une case par condition, avec « + Ajouter une condition ». Bouton Enregistrer toujours visible. Plusieurs e-mails par client."
+  "changelog": "Fiche client : « + Ajouter un e-mail ». À l'envoi, cases à cocher pour choisir les destinataires. Conditions une par case."
 }

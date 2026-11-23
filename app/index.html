@@ -868,6 +868,7 @@ function bindView(v){
 }
 
 /* ---------- client & article forms ---------- */
+const emailRowHtml=(e,i)=>`<div class="em-row" style="display:flex;gap:8px;align-items:center"><input type="email" class="c-em" ${i===0?'id="c-email"':''} value="${esc(e)}" placeholder="${i===0?'adresse@client.fr':'autre adresse (compta, secrétariat…)'}" autocomplete="off" style="flex:1">${i===0?`<button type="button" class="btn ghost sm" tabindex="-1" aria-hidden="true" style="flex:none;visibility:hidden">${ICON.x}</button>`:`<button type="button" class="btn ghost sm" data-em-del aria-label="Supprimer cet e-mail" title="Supprimer" style="flex:none">${ICON.x}</button>`}</div>`;
 function clientForm(c){
   const x=c?{...c}:{id:null,nom:'',prenom:'',nomFamille:'',type:'particulier',siren:'',siret:'',chorus:false,codeService:'',tvaIntra:'',adresse:'',cp:'',ville:'',email:'',tel:'',contact:''};
   if(x.type!=='pro'&&!x.prenom&&!x.nomFamille&&x.nom){const p=x.nom.split(' ');x.prenom=p.length>1?p.shift():'';x.nomFamille=p.join(' ');}
@@ -878,7 +879,7 @@ function clientForm(c){
       ${HOSTED?`<div class="field full for-pro"><label for="c-search">Rechercher l'entreprise (nom ou SIREN)</label><div class="row" style="flex-wrap:nowrap"><input type="text" id="c-search" placeholder="Ex. GB GLOBAL ou 988176129" autocomplete="off"><button class="btn" type="button" id="c-search-go">Rechercher</button></div><span class="hint">Les informations officielles se remplissent toutes seules depuis l'annuaire des entreprises.</span><div id="c-results" class="co-results"></div></div>`:''}
       ${f('prenom','Prénom','text','for-part')}${f('nomFamille','Nom','text','for-part')}
       ${f('nom','Raison sociale','text','full for-pro')}${f('contact','Personne à contacter (facultatif)','text','for-pro')}${f('siren','SIREN','text','for-pro')}
-      ${f('adresse','Adresse','text','full')}${f('cp','Code postal')}${f('ville','Ville')}${f('tel','Téléphone','tel')}<div class="field full"><label for="c-email">E-mail(s)</label><input type="text" id="c-email" data-k="email" value="${esc(clientEmails(x).join(', '))}" placeholder="adresse@client.fr, compta@client.fr" autocomplete="off" inputmode="email"><span class="hint">Plusieurs adresses ? Sépare-les par une virgule. La première est l'adresse principale.</span></div>${f('tvaIntra','N° TVA intracommunautaire (facultatif)','text','full for-pro')}
+      ${f('adresse','Adresse','text','full')}${f('cp','Code postal')}${f('ville','Ville')}${f('tel','Téléphone','tel')}<div class="field full"><label for="c-email">E-mail</label><div id="c-emails" style="display:flex;flex-direction:column;gap:8px">${(clientEmails(x).length?clientEmails(x):['']).map((e,i)=>emailRowHtml(e,i)).join('')}</div><div><button type="button" class="btn sm" id="c-email-add" style="margin-top:8px">+ Ajouter un e-mail</button></div><span class="hint">La première adresse est l'adresse principale. À l'envoi, tu coches à qui envoyer.</span></div>${f('tvaIntra','N° TVA intracommunautaire (facultatif)','text','full for-pro')}
       <div class="field full for-pro"><label class="row" style="gap:8px;font-weight:600;cursor:pointer"><input type="checkbox" id="c-chorus" ${x.chorus?'checked':''} style="width:18px;height:18px"> Client public : factures déposées sur Chorus Pro</label><span class="hint">Mairie, école, collectivité, administration… Les factures sont alors payées par virement : pas de lien de paiement par carte.</span></div>
       ${f('siret','SIRET (14 chiffres, facultatif sauf Chorus Pro)','text','for-pro')}${f('codeService','Code service Chorus (si le client te l\'a donné)','text','for-pro for-chorus')}
     </div>
@@ -894,11 +895,13 @@ function clientForm(c){
         }catch(e){box.innerHTML=`<span class="hint" style="color:var(--danger)">${esc(e.message||"La recherche n'a pas abouti.")}</span>`;}};
         sgo.addEventListener('click',run);$('#c-search',dl).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();run();}});}
       const showType=()=>{$$('.for-part',dl).forEach(el=>el.hidden=x.type==='pro');$$('.for-pro',dl).forEach(el=>el.hidden=x.type!=='pro');const ch=$('#c-chorus',dl);$$('.for-chorus',dl).forEach(el=>el.hidden=x.type!=='pro'||!(ch&&ch.checked));};showType();$('#c-chorus',dl).addEventListener('change',showType);
+      $('#c-email-add',dl).addEventListener('click',()=>{const box=$('#c-emails',dl);box.insertAdjacentHTML('beforeend',emailRowHtml('',$$('.c-em',box).length));const ins=$$('.c-em',box);ins[ins.length-1].focus();});
+      $('#c-emails',dl).addEventListener('click',e=>{const b=e.target.closest('[data-em-del]');if(b)b.closest('.em-row').remove();});
       $$('#c-type button',dl).forEach(b=>b.addEventListener('click',()=>{x.type=b.dataset.v;$$('#c-type button',dl).forEach(y=>y.classList.toggle('on',y===b));showType();}));
       dl.addEventListener('click',async e=>{const a=e.target.closest('[data-a]');if(!a)return;
         if(a.dataset.a==='close'){closeModal();res(null);}
         if(a.dataset.a==='save'){$$('[data-k]',dl).forEach(i=>x[i.dataset.k]=i.value.trim());
-          {const ems=splitEmails(x.email);const bad=ems.find(e=>!EMAIL_RE.test(e));if(bad){toast('Adresse e-mail invalide : '+bad);return;}x.emails=ems;x.email=ems[0]||'';}
+          {const ems=splitEmails($$('.c-em',dl).map(i=>i.value).join(','));const bad=ems.find(e=>!EMAIL_RE.test(e));if(bad){toast('Adresse e-mail invalide : '+bad);return;}x.emails=ems;x.email=ems[0]||'';}
           x.chorus=x.type==='pro'&&$('#c-chorus',dl).checked;x.siret=x.siret.replace(/\s/g,'');
           if(x.siret&&!/^\d{14}$/.test(x.siret)){toast('Le SIRET doit contenir 14 chiffres');return;}
           if(x.chorus&&!x.siret){toast('Pour Chorus Pro, indique le SIRET du client (14 chiffres)');return;}
