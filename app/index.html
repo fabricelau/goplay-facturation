@@ -376,9 +376,13 @@ En cas d'intempéries rendant l'activité impossible, la session est reportée s
 Âge minimum : 8 ans. Les mineurs participent sous la responsabilité d'un adulte.
 Chaque participant (ou son représentant légal) signe une décharge de responsabilité avant la session.
 Le port des lunettes de protection est obligatoire pendant toute la partie.`;
+const DEFAULT_COND_FACT=`Le solde est à régler au plus tard le jour de la session.
+Toute session commencée est due dans sa totalité.
+Les sommes versées restent acquises en cas d'absence ou d'annulation moins de 24 h avant la session.
+Le client est responsable des dégradations volontaires du matériel prêté.`;
 const EVT_KEYS=['evtDate','evtHeure','evtDuree','participants','accompagnateurs','evtNote','montantFerme'];
 const evtOf=d=>Object.fromEntries(EVT_KEYS.filter(k=>d[k]!=null&&d[k]!=='').map(k=>[k,d[k]]));
-const DEFAULT_SETTINGS={nom:'',forme:'Entreprise individuelle',siren:'',rcs:'',adresse:'',cp:'',ville:'',tel:'',email:'',tvaIntra:'',regimeTva:'normal',tvaSurDebits:false,saisiePrix:'ht',logo:'',logoW:0,logoH:0,conditionsDevis:DEFAULT_COND,iban:'',bic:'',delaiPaiement:30,validiteDevis:30,
+const DEFAULT_SETTINGS={nom:'',forme:'Entreprise individuelle',siren:'',rcs:'',adresse:'',cp:'',ville:'',tel:'',email:'',tvaIntra:'',regimeTva:'normal',tvaSurDebits:false,saisiePrix:'ht',logo:'',logoW:0,logoH:0,conditionsDevis:DEFAULT_COND,conditionsFacture:DEFAULT_COND_FACT,iban:'',bic:'',delaiPaiement:30,validiteDevis:30,
   prefixeFacture:'F',prefixeDevis:'D',prefixeAvoir:'AV',annee:true,debutFacture:1,debutDevis:1,debutAvoir:1,mentionsLibres:'',penalites:"Taux d'intérêt de la BCE majoré de 10 points"};
 
 /* ---------- state ---------- */
@@ -520,6 +524,10 @@ function soldeInfo(d){
   return {label:n?`Total du devis n° ${n} TTC`:'Total de la prestation TTC',gross:r2(gross),deps:Object.values(deps),rest:totals(d).ttc};
 }
 /* a deposit invoice: from a quote (acompteDe) or created directly (acompteLibre) */
+/* a client can have several e-mail addresses: the first one is the main one */
+const EMAIL_RE=/^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$/;
+const splitEmails=v=>[...new Set(String(v||'').split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean))];
+const clientEmails=c=>c?[...new Set([c.email,...(Array.isArray(c.emails)?c.emails:[])].filter(Boolean))]:[];
 const isAc=d=>!!(d&&(d.acompteDe||d.acompteLibre));
 /* public-sector client invoiced through Chorus Pro: paid by bank transfer, never by card */
 const isChorus=d=>!!(d&&((d.client&&d.client.chorus)||((!d.numero||d.statut==='brouillon')&&(clientById(d.clientId)||{}).chorus)));
@@ -780,7 +788,8 @@ function vParams(){
     ${f('penalites','Pénalités de retard','text','full')}
     <div class="field full"><label for="p-lienSurPdf">Lien de paiement par carte (SumUp)</label><select id="p-lienSurPdf" data-p="lienSurPdf"><option value="true" ${s.lienSurPdf!==false?'selected':''}>Sur le PDF de la facture et dans l'e-mail</option><option value="false" ${s.lienSurPdf===false?'selected':''}>Dans l'e-mail seulement (pas sur le PDF)</option></select><span class="hint">Les clients publics (Chorus Pro) n'ont jamais de lien de paiement, quel que soit ce choix.</span></div>
     <div class="field full"><label for="p-mentionsLibres">Mentions libres sur tous les documents (assurance, garanties…)</label><textarea id="p-mentionsLibres" data-p="mentionsLibres">${esc(s.mentionsLibres)}</textarea></div>
-    <div class="field full"><label for="p-conditionsDevis">Conditions de réservation (imprimées sur les devis)</label><textarea id="p-conditionsDevis" data-p="conditionsDevis" style="min-height:150px">${esc(s.conditionsDevis)}</textarea><span class="hint">Une condition par ligne. Texte proposé à vérifier et adapter à tes vraies règles.</span></div>
+    <div class="field full"><label for="p-conditionsDevis">Conditions de réservation (imprimées sur les devis)</label><textarea id="p-conditionsDevis" data-p="conditionsDevis" style="min-height:150px">${esc(s.conditionsDevis)}</textarea><span class="hint">Une condition par ligne. Sur chaque devis, tu coches celles à imprimer.</span></div>
+    <div class="field full"><label for="p-conditionsFacture">Conditions imprimées sur les factures</label><textarea id="p-conditionsFacture" data-p="conditionsFacture" style="min-height:120px">${esc(s.conditionsFacture)}</textarea><span class="hint">Une condition par ligne. Sur chaque facture, tu coches celles à imprimer. Laisse vide pour n'en mettre aucune.</span></div>
   </div></div>
   ${HOSTED?`<div class="panel"><div class="sec-title">L'appli sur ton téléphone</div><div class="body" style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px">
     ${window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches?`<span style="color:var(--ok);font-weight:600">✓ Tu utilises déjà l'appli installée.</span>`:`
@@ -866,7 +875,7 @@ function clientForm(c){
       ${HOSTED?`<div class="field full for-pro"><label for="c-search">Rechercher l'entreprise (nom ou SIREN)</label><div class="row" style="flex-wrap:nowrap"><input type="text" id="c-search" placeholder="Ex. GB GLOBAL ou 988176129" autocomplete="off"><button class="btn" type="button" id="c-search-go">Rechercher</button></div><span class="hint">Les informations officielles se remplissent toutes seules depuis l'annuaire des entreprises.</span><div id="c-results" class="co-results"></div></div>`:''}
       ${f('prenom','Prénom','text','for-part')}${f('nomFamille','Nom','text','for-part')}
       ${f('nom','Raison sociale','text','full for-pro')}${f('contact','Personne à contacter (facultatif)','text','for-pro')}${f('siren','SIREN','text','for-pro')}
-      ${f('adresse','Adresse','text','full')}${f('cp','Code postal')}${f('ville','Ville')}${f('email','E-mail','email')}${f('tel','Téléphone','tel')}${f('tvaIntra','N° TVA intracommunautaire (facultatif)','text','full for-pro')}
+      ${f('adresse','Adresse','text','full')}${f('cp','Code postal')}${f('ville','Ville')}${f('tel','Téléphone','tel')}<div class="field full"><label for="c-email">E-mail(s)</label><input type="text" id="c-email" data-k="email" value="${esc(clientEmails(x).join(', '))}" placeholder="adresse@client.fr, compta@client.fr" autocomplete="off" inputmode="email"><span class="hint">Plusieurs adresses ? Sépare-les par une virgule. La première est l'adresse principale.</span></div>${f('tvaIntra','N° TVA intracommunautaire (facultatif)','text','full for-pro')}
       <div class="field full for-pro"><label class="row" style="gap:8px;font-weight:600;cursor:pointer"><input type="checkbox" id="c-chorus" ${x.chorus?'checked':''} style="width:18px;height:18px"> Client public : factures déposées sur Chorus Pro</label><span class="hint">Mairie, école, collectivité, administration… Les factures sont alors payées par virement : pas de lien de paiement par carte.</span></div>
       ${f('siret','SIRET (14 chiffres, facultatif sauf Chorus Pro)','text','for-pro')}${f('codeService','Code service Chorus (si le client te l\'a donné)','text','for-pro for-chorus')}
     </div>
@@ -885,7 +894,9 @@ function clientForm(c){
       $$('#c-type button',dl).forEach(b=>b.addEventListener('click',()=>{x.type=b.dataset.v;$$('#c-type button',dl).forEach(y=>y.classList.toggle('on',y===b));showType();}));
       dl.addEventListener('click',async e=>{const a=e.target.closest('[data-a]');if(!a)return;
         if(a.dataset.a==='close'){closeModal();res(null);}
-        if(a.dataset.a==='save'){$$('[data-k]',dl).forEach(i=>x[i.dataset.k]=i.value.trim());x.chorus=x.type==='pro'&&$('#c-chorus',dl).checked;x.siret=x.siret.replace(/\s/g,'');
+        if(a.dataset.a==='save'){$$('[data-k]',dl).forEach(i=>x[i.dataset.k]=i.value.trim());
+          {const ems=splitEmails(x.email);const bad=ems.find(e=>!EMAIL_RE.test(e));if(bad){toast('Adresse e-mail invalide : '+bad);return;}x.emails=ems;x.email=ems[0]||'';}
+          x.chorus=x.type==='pro'&&$('#c-chorus',dl).checked;x.siret=x.siret.replace(/\s/g,'');
           if(x.siret&&!/^\d{14}$/.test(x.siret)){toast('Le SIRET doit contenir 14 chiffres');return;}
           if(x.chorus&&!x.siret){toast('Pour Chorus Pro, indique le SIRET du client (14 chiffres)');return;}
           if(x.siret&&!x.siren)x.siren=x.siret.slice(0,9);
@@ -959,8 +970,8 @@ function formHtml(d){
     <div class="field"><label for="e-participants">Nombre de participants</label><input type="number" min="0" id="e-participants" data-f="participants" value="${esc(d.participants)}"></div>
     <div class="field"><label for="e-accompagnateurs">Nombre d'accompagnateurs</label><input type="number" min="0" step="1" id="e-accompagnateurs" data-f="accompagnateurs" value="${esc(d.accompagnateurs)}"></div>
     <div class="field full"><label for="e-evtNote">Note personnalisée</label><textarea id="e-evtNote" data-f="evtNote" placeholder="Ex. Prévoir des chaussures fermées. Gâteau apporté par la famille.">${esc(d.evtNote)}</textarea><span class="hint">S'affiche sur le document, sous les informations de l'événement.</span></div>
-    ${d.type==='devis'?`<div class="field full"><label style="display:flex;align-items:flex-start;gap:8px;color:var(--ink);font-size:14px;font-weight:500"><input type="checkbox" id="e-ferme" ${d.montantFerme!==false?'checked':''} style="width:18px;height:18px;flex:none;margin-top:2px"> Montant dû même si moins de participants le jour J</label><span class="hint">Affiche ou masque cette condition dans les conditions de réservation du devis.</span></div>`:''}
   </div></div>`:''}
+  ${condRaw(d).length?`<div class="panel"><div class="panel-h"><h2>${condTitle(d)}</h2><span class="hint">Coche ce qui s'imprime sur ce${d.type==='devis'?' devis':'tte facture'}</span></div><div class="body" id="e-conds" style="padding:12px 16px 14px;display:flex;flex-direction:column;gap:8px">${condRaw(d).map((x,i)=>`<label style="display:flex;align-items:flex-start;gap:8px;color:var(--ink);font-size:14px;font-weight:400;cursor:pointer"><input type="checkbox" class="e-cond" data-i="${i}" ${condIsOn(d,x)?'checked':''} style="width:18px;height:18px;flex:none;margin-top:2px"> <span>${esc(x)}</span></label>`).join('')}<span class="hint">La liste se modifie dans Réglages.</span></div></div>`:''}
   <div class="panel"><div class="panel-h"><h2>Lignes</h2></div><div class="lines" id="e-lines">${linesHtml(d)}</div>
     <div class="add-row"><button class="btn" id="e-addline">+ Ligne libre</button>${S.formules.length?`<select id="e-addform"><option value="">+ Formule…</option>${[...S.formules].sort((a,b)=>(a.nom||'').localeCompare(b.nom||'')).map(f=>`<option value="${f.id}">${esc(f.nom)}</option>`).join('')}</select>`:''}<button class="btn" id="e-remise">+ Remise</button>${d.type==='facture'&&!isAc(d)&&d.clientId&&freeDepositsOf(d.clientId,d.id).filter(a=>!(d.lignes||[]).some(l=>l.acompteRef===a.id)).length?`<button class="btn" id="e-deduct">− Déduire un acompte</button>`:''}${S.articles.length?`<select id="e-addart"><option value="">+ Depuis le catalogue…</option>${[...S.articles].sort((a,b)=>(a.designation||'').localeCompare(b.designation||'')).map(a=>`<option value="${a.id}">${esc(a.designation)} · ${eur(+a.pu||0)}</option>`).join('')}</select>`:`<a class="btn ghost sm" href="#catalogue" id="e-tocat">Créer un catalogue</a>`}</div>
     <div class="totals" id="e-totals"></div></div>
@@ -1017,7 +1028,7 @@ function bindForm(ed){
     if(ls.length===1&&!ls[0].designation&&!hasPrice(ls[0]))ls.splice(0,1);ls.push(...add);if(!S.edit.objet&&f.nom){S.edit.objet=f.nom;const o=$('#e-objet');if(o)o.value=f.nom;}
     $('#e-lines').innerHTML=linesHtml(S.edit);sf.value='';updatePreview();toast(`Formule « ${f.nom} » ajoutée`);});
   $('#e-remise',ed).addEventListener('click',remiseForm);
-  const fe=$('#e-ferme',ed);if(fe)fe.addEventListener('change',()=>{S.edit.montantFerme=fe.checked;updatePreview();});
+  $$('.e-cond',ed).forEach(cb=>cb.addEventListener('change',()=>{const raw=condRaw(S.edit);const off=[];$$('.e-cond',ed).forEach(c=>{const x=raw[+c.dataset.i];if(x==null)return;if(!c.checked)off.push(x);if(/nombre de participants/i.test(x)&&S.edit.type==='devis')S.edit.montantFerme=c.checked;});S.edit.condOff=off;updatePreview();}));
   const acd=$('#e-acDem',ed);if(acd){const acp=$('#e-acPct',ed);
     acd.addEventListener('change',()=>{S.edit.acompteDemande=acd.checked;if(acd.checked&&!S.edit.acomptePct)S.edit.acomptePct=+acp.value||30;$('#e-acRow',ed).hidden=!acd.checked;updatePreview();});
     acp.addEventListener('input',()=>{S.edit.acomptePct=Math.min(100,Math.max(0,+acp.value||0));updatePreview();});}
@@ -1025,7 +1036,7 @@ function bindForm(ed){
 }
 function updatePreview(){renderTotals();const am=$('#e-acMt');if(am){const a=acompteDemande(S.edit);am.textContent=a?'soit '+eur(a.mt)+' TTC':'';}const p=$('#paper');if(p)p.innerHTML=paperHtml(S.edit);}
 
-function snapshotClient(c){return c?{nom:c.nom,type:c.type,siren:c.siren||'',siret:c.siret||'',chorus:!!c.chorus,codeService:c.codeService||'',tvaIntra:c.tvaIntra||'',adresse:c.adresse||'',cp:c.cp||'',ville:c.ville||'',email:c.email||'',contact:c.contact||''}:null;}
+function snapshotClient(c){return c?{emails:clientEmails(c),nom:c.nom,type:c.type,siren:c.siren||'',siret:c.siret||'',chorus:!!c.chorus,codeService:c.codeService||'',tvaIntra:c.tvaIntra||'',adresse:c.adresse||'',cp:c.cp||'',ville:c.ville||'',email:c.email||'',contact:c.contact||''}:null;}
 function cleanLines(d){d.lignes=(d.lignes||[]).filter(l=>l.designation||hasPrice(l)).map(l=>({...l,qte:+l.qte||0,pu:+l.pu||0,puTTC:+l.puTTC||0,tva:isFranchise()?0:+l.tva||0}));if(!d.lignes.length)d.lignes=[{id:uid(),designation:'',details:'',qte:1,unite:'u',pu:0,tva:8.5}];}
 async function saveDraft(){const d=S.edit;d.client=snapshotClient(clientById(d.clientId));await safe(()=>put('docs',JSON.parse(JSON.stringify(d))),'Brouillon enregistré');S.edit=JSON.parse(JSON.stringify(d));}
 async function emit(){
@@ -1214,7 +1225,7 @@ function paperHtml(d){
    ${d.type==='facture'&&virLines(d,s).length?`<div class="pp-ment" style="margin-top:10px;color:var(--paper-ink)"><b>Par virement</b>${virLines(d,s).map(x=>'<br>'+esc(x)).join('')}</div>`:''}
    ${d.notes?`<p style="margin-top:12px">${esc(d.notes).replace(/\n/g,'<br>')}</p>`:''}
    ${d.type==='devis'&&d.lienDevis?`<div class="pp-pay"><b>${d.acompteDemande&&HOSTED&&window.GPF.sumup?"Accepter ce devis et régler l'acompte en ligne":'Accepter ce devis en ligne'} :</b> <a href="${esc(d.lienDevis)}" target="_blank" rel="noopener" style="color:var(--paper-accent)">${esc(d.lienDevis)}</a></div>`:''}
-   ${d.type==='devis'&&condLines(d).length?`<div class="pp-cond"><b>Conditions de réservation</b>${condLines(d).map(x=>`<p>• ${esc(x)}</p>`).join('')}</div>`:''}
+   ${condLines(d).length?`<div class="pp-cond"><b>${condTitle(d)}</b>${condLines(d).map(x=>`<p>• ${esc(x)}</p>`).join('')}</div>`:''}
    ${d.type==='devis'?`<div class="pp-sign"><div>Bon pour accord, date et signature du client</div><div>Signature de l'entreprise</div></div>`:''}
    <div class="pp-ment">${legalLines(d).map(x=>`<p>${esc(x)}</p>`).join('')}</div></div>`;
 }
@@ -1300,7 +1311,7 @@ function buildPdf(d,fx){
     p.setDrawColor(...ACC);p.setLineWidth(.2);ul.forEach((l,i)=>p.line(M+4,y+4.2+i*4.2+0.8,M+4+p.getTextWidth(l),y+4.2+i*4.2+0.8));
     try{p.link(M,y-4.5,W-2*M,bh,{url});}catch(e){}
     y+=bh+4;}
-  if(d.type==='devis'&&condLines(d).length){p.setFontSize(8);const cl2=[];condLines(d).forEach(x=>cl2.push(...p.splitTextToSize('• '+x,W-2*M)));if(y+cl2.length*3.6+6>280){p.addPage();y=20;}txt('Conditions de réservation',M,y,{b:1,s:8.5});y+=4;p.setFont(FF,'normal');p.setFontSize(8);p.setTextColor(...INK);p.text(cl2,M,y);y+=cl2.length*3.6+4;}
+  if(condLines(d).length){p.setFontSize(8);const cl2=[];condLines(d).forEach(x=>cl2.push(...p.splitTextToSize('• '+x,W-2*M)));if(y+cl2.length*3.6+6>280){p.addPage();y=20;}txt(condTitle(d),M,y,{b:1,s:8.5});y+=4;p.setFont(FF,'normal');p.setFontSize(8);p.setTextColor(...INK);p.text(cl2,M,y);y+=cl2.length*3.6+4;}
   if(d.type==='devis'){if(y+26>280){p.addPage();y=20;}p.setDrawColor(...LINE);p.line(M,y,96,y);p.line(114,y,W-M,y);txt('Bon pour accord, date et signature du client',M,y+4,{s:8,c:MUT});txt("Signature de l'entreprise",114,y+4,{s:8,c:MUT});y+=26;}
   p.setFont(FF,'normal');p.setFontSize(7.5);const lg=[];legalLines(d).forEach(x=>lg.push(...p.splitTextToSize(x,W-2*M)));
   if(y+lg.length*3.4>287){p.addPage();y=20;}
@@ -1497,7 +1508,11 @@ function evtLines(d){
   return out;
 }
 function acompteDemande(d){if(d.type!=='devis'||!d.acompteDemande)return null;const pct=+d.acomptePct||30;return {pct,mt:r2(totals(d).ttc*pct/100)};}
-function condLines(d){const ac=d&&acompteDemande(d);return String(S.settings.conditionsDevis||'').split('\n').map(x=>x.trim()).filter(Boolean).filter(x=>!(d&&d.montantFerme===false&&/nombre de participants/i.test(x))).map(x=>ac?x:x.replace(/\s+et de l['’]acompte(?=\s*\.?\s*$)/i,''));}
+/* conditions: one list for quotes, one for invoices; each document can untick lines (condOff) */
+const condTitle=d=>d&&d.type==='devis'?'Conditions de réservation':'Conditions';
+function condRaw(d){const k=d&&d.type==='devis'?'conditionsDevis':d&&d.type==='facture'?'conditionsFacture':'';return k?[...new Set(String(S.settings[k]||'').split('\n').map(x=>x.replace(/^[•\-*]\s*/,'').trim()).filter(Boolean))]:[];}
+const condIsOn=(d,x)=>!(Array.isArray(d.condOff)&&d.condOff.includes(x))&&!(d.type==='devis'&&d.montantFerme===false&&/nombre de participants/i.test(x));
+function condLines(d){const ac=d&&acompteDemande(d);return condRaw(d).filter(x=>condIsOn(d,x)).map(x=>ac?x:x.replace(/\s+et de l['’]acompte(?=\s*\.?\s*$)/i,''));}
 
 /* ---------- remise ---------- */
 function remiseForm(){
@@ -1774,11 +1789,11 @@ function tplEditor(k,after){
   });
 }
 function emailForm(d,kind){
-  const tpl=mailTemplate(d,kind);const to=(d.client&&d.client.email)||(clientById(d.clientId)||{}).email||'';
+  const tpl=mailTemplate(d,kind);const known=[...new Set([...clientEmails(clientById(d.clientId)),...clientEmails(d.client)])];
   const fname=pdfName(d);
   openModal(`<div class="panel-h"><h2>${kind==='relance'?'Relance':'Envoi'} de ${esc(TYPE_LBL[d.type].toLowerCase())} ${esc(d.numero||'')}</h2><button class="btn ghost sm" data-a="close" aria-label="Fermer">${ICON.x}</button></div>
     <div class="form">
-      <div class="field full"><label for="ml-to">Destinataire</label><input type="email" id="ml-to" value="${esc(to)}" placeholder="adresse@client.fr"></div>
+      <div class="field full"><label for="ml-to">Destinataire(s)</label>${known.length?`<div class="ml-tos" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px">${known.map((e,i)=>`<label class="row" style="gap:8px;cursor:pointer;font-weight:400;flex-wrap:nowrap"><input type="checkbox" class="ml-pick" value="${esc(e)}" ${i===0?'checked':''} style="width:18px;height:18px;flex:none"> <span style="overflow-wrap:anywhere">${esc(e)}</span></label>`).join('')}</div>`:''}<input type="text" id="ml-to" value="" placeholder="${known.length?'Autre(s) adresse(s), séparées par une virgule':'adresse@client.fr'}" autocomplete="off" inputmode="email"></div>
       <div class="field full"><label for="ml-sub">Objet</label><input type="text" id="ml-sub" value="${esc(tpl.subject)}"></div>
       <div class="field full copybox"><label for="ml-body">Message</label><textarea id="ml-body">${esc(tpl.body)}</textarea></div>
       <div class="field full"><span class="hint">${HOSTED?`Le PDF (${esc(fname)}) sera joint. L'e-mail part <b>directement</b> au client quand tu cliques sur Envoyer, et tu en reçois une copie.`:S.mcp?`Le PDF (${esc(fname)}) sera joint. Le message arrive dans tes <b>brouillons Gmail</b> : tu le relis et tu cliques sur Envoyer.`:"La création du brouillon Gmail n'est pas disponible dans cette vue. Copie le texte et joins le PDF téléchargé à ton e-mail."}</span></div>
@@ -1792,11 +1807,12 @@ function emailForm(d,kind){
       if(a==='copy'){const txt=`Objet : ${$('#ml-sub',dl).value}\n\n${$('#ml-body',dl).value}`;try{await navigator.clipboard.writeText(txt);toast('Message copié');}catch(err){const ta=$('#ml-body',dl);ta.focus();ta.select();toast('Sélectionne le texte et copie-le');}return;}
       if(a==='pdf'){downloadPdf(d);return;}
       if(a==='gmail'){
-        const addr=$('#ml-to',dl).value.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)){toast('Indique une adresse e-mail valide');return;}
+        const extra=splitEmails($('#ml-to',dl).value);const badE=extra.find(e=>!EMAIL_RE.test(e));if(badE){toast('Adresse e-mail invalide : '+badE);return;}
+        const tos=[...new Set([...$$('.ml-pick',dl).filter(i=>i.checked).map(i=>i.value),...extra])];if(!tos.length){toast('Choisis au moins un destinataire');return;}const addr=tos.join(', ');
         b.disabled=true;b.textContent=HOSTED?'Envoi…':'Création…';
         try{
           const content=await blobToB64(await makePdf(d));
-          const res=await S.mcp.callTool('Gmail','create_draft',{to:[addr],subject:$('#ml-sub',dl).value,body:$('#ml-body',dl).value,attachments:[{content,filename:fname,mimeType:'application/pdf'}],includeSignature:false});
+          const res=await S.mcp.callTool('Gmail','create_draft',{to:tos,subject:$('#ml-sub',dl).value,body:$('#ml-body',dl).value,attachments:[{content,filename:fname,mimeType:'application/pdf'}],includeSignature:false});
           const pl=res&&res.payload;const url=pl&&(pl.viewUrl||(pl.draft&&pl.draft.viewUrl));
           const box=$('#ml-done',dl);box.hidden=false;box.innerHTML=HOSTED?`<div class="banner info"><span>E-mail envoyé à ${esc(addr)} avec le PDF joint.</span></div>`:`<div class="banner info"><span>Brouillon créé dans Gmail avec le PDF joint. Ouvre-le pour l'envoyer.</span>${url?`<a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener" style="margin-left:auto">Ouvrir dans Gmail</a>`:''}</div>`;
           b.textContent=HOSTED?'E-mail envoyé':'Brouillon créé';

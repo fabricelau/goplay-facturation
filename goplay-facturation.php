@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.12.3
+ * Version: 1.13.0
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.12.3');
+define('GPF_VERSION', '1.13.0');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -524,7 +524,7 @@ function gpf_rest_mail($req) {
     $b = $req->get_json_params();
     $to = $b['to'] ?? [];
     if (is_string($to)) $to = [$to];
-    $to = array_values(array_filter($to, 'is_email'));
+    $to = array_slice(array_values(array_unique(array_filter(array_map('trim', array_filter((array) $to, 'is_string')), 'is_email'))), 0, 10);
     if (!$to) return new WP_Error('bad', 'Adresse e-mail invalide', ['status' => 400]);
     $subject = sanitize_text_field($b['subject'] ?? '');
     $body = (string)($b['body'] ?? '');
@@ -652,10 +652,12 @@ function gpf_render_pay($token) {
 /* ------------------------------------------------------------------ */
 
 function gpf_cond_lines($d, $s) {
-    $lines = array_filter(array_map('trim', explode("\n", (string)($s['conditionsDevis'] ?? ''))));
+    $lines = array_unique(array_filter(array_map(function ($x) { return trim(preg_replace('/^[•\-*]\s*/u', '', trim($x))); }, explode("\n", (string)($s['conditionsDevis'] ?? '')))));
     $ac = !empty($d['acompteDemande']);
+    $off = is_array($d['condOff'] ?? null) ? $d['condOff'] : [];
     $out = [];
     foreach ($lines as $x) {
+        if (in_array($x, $off, true)) continue;
         if (isset($d['montantFerme']) && $d['montantFerme'] === false && stripos($x, 'nombre de participants') !== false) continue;
         if (!$ac) $x = preg_replace("/\\s+et de l['’]acompte(?=\\s*\\.?\\s*$)/iu", '', $x);
         $out[] = $x;
@@ -963,6 +965,16 @@ function gpf_fill_tpl($str, $v) {
     return trim($o);
 }
 function gpf_eur_fr($n) { return number_format((float)$n, 2, ',', ' ') . ' €'; }
+/* The follow-up goes to the addresses the quote was last e-mailed to (falls back to the client's main address). */
+function gpf_followup_recipients($d) {
+    $to = [];
+    foreach (array_reverse((array)($d['envois'] ?? [])) as $e) {
+        if (!empty($e['to']) && is_string($e['to'])) { $to = preg_split('/[\s,;]+/', $e['to'], -1, PREG_SPLIT_NO_EMPTY); break; }
+    }
+    $to = array_values(array_unique(array_filter(array_map('trim', $to), 'is_email')));
+    if (!$to && is_email($d['client']['email'] ?? '')) $to = [$d['client']['email']];
+    return array_slice($to, 0, 10);
+}
 /* Returns the reason a quote is not followed up, or '' when the follow-up is due today. */
 function gpf_quote_followup_due($d, $s, $today) {
     if (!is_array($d) || ($d['type'] ?? '') !== 'devis' || !empty($d['test']) || ($d['statut'] ?? '') !== 'envoye') return 'statut';
@@ -974,8 +986,7 @@ function gpf_quote_followup_due($d, $s, $today) {
     if ($due > $today) return 'pas-encore';
     if (!empty($d['validite']) && $d['validite'] < $today) return 'expire';
     if (!empty($d['evtDate']) && $d['evtDate'] < $today) return 'session-passee';
-    $to = $d['client']['email'] ?? '';
-    if (!is_email($to)) return 'sans-email';
+    if (!gpf_followup_recipients($d)) return 'sans-email';
     return '';
 }
 function gpf_quote_followups() {
@@ -1009,11 +1020,12 @@ function gpf_quote_followups() {
         $subject = gpf_fill_tpl($tpl['sujet'], $v);
         $headers = gpf_mail_headers();
         $copy = gpf_opt('copy_to', '');
-        if ($copy && is_email($copy) && $copy !== $c['email']) $headers[] = 'Bcc: ' . $copy;
-        if (!wp_mail($c['email'], $subject, $body, $headers)) continue;
+        $tos = gpf_followup_recipients($d);
+        if ($copy && is_email($copy) && !in_array($copy, $tos, true)) $headers[] = 'Bcc: ' . $copy;
+        if (!wp_mail($tos, $subject, $body, $headers)) continue;
         $fresh = gpf_get('docs', $r['id']);
         if (!is_array($fresh) || gpf_quote_followup_due($fresh, $s, $today) !== '') continue;
-        $fresh['envois'] = array_merge((array)($fresh['envois'] ?? []), [['date' => $today, 'kind' => 'relance-auto', 'to' => $c['email']]]);
+        $fresh['envois'] = array_merge((array)($fresh['envois'] ?? []), [['date' => $today, 'kind' => 'relance-auto', 'to' => implode(', ', $tos)]]);
         $fresh['relanceAuto'] = $today;
         gpf_put('docs', $r['id'], $fresh);
         $sent++;
