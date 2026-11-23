@@ -1,7 +1,7 @@
 {
-  "version": "1.13.0",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.13.0.zip",
+  "version": "1.13.1",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.13.1.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Plusieurs e-mails par client et choix des destinataires à l'envoi. Conditions à cocher sur chaque devis et chaque facture."
+  "changelog": "Réglages : le bouton Enregistrer reste toujours visible. (1.13.0 : plusieurs e-mails par client, conditions à cocher.)"
 }

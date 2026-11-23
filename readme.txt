@@ -1,5 +1,5 @@
 === Goplay Arena Facturation ===
-Version : 1.13.0
+Version : 1.13.1
 
 Outil de devis et factures de GB GLOBAL (Goplay Arena), accessible sur /facturation.
 Réservé aux administrateurs WordPress du site.
@@ -18,3 +18,6 @@ La désactivation de l'extension ne supprime aucune donnée.
 - La relance automatique d'un devis part aux mêmes destinataires que l'envoi.
 - Conditions de réservation : cases à cocher sur chaque devis pour choisir celles qui s'impriment.
 - Nouvelles conditions pour les factures (Réglages), à cocher aussi sur chaque facture.
+
+= 1.13.1 =
+- Réglages : le bouton « Enregistrer » reste visible en haut de l'écran pendant que tu descends.

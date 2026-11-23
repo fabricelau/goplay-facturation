@@ -55,6 +55,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .head h1{font-size:28px}
 .head p{margin:4px 0 0;color:var(--muted)}
+.head-sticky{position:sticky;top:0;z-index:15;background:var(--bg);margin-top:-28px;padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:12px;margin-bottom:4px;border-bottom:1px solid var(--line);align-items:center}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:500;white-space:nowrap}
@@ -248,6 +249,7 @@ fieldset{border:0;margin:0;padding:0}
   .side{display:none}
   .main{padding-block:18px calc(90px + env(safe-area-inset-bottom,0px))}
   .head h1{font-size:23px}
+  .head-sticky{flex-wrap:nowrap;padding-top:calc(10px + env(safe-area-inset-top,0px));padding-bottom:10px}.head-sticky p{display:none}
   .mobile-nav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
   .mobile-nav a{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;font-size:11px;color:var(--muted);text-decoration:none}
   .mobile-nav a svg{width:20px;height:20px}
@@ -756,7 +758,7 @@ function vCatalogue(){
 function vParams(){
   const s=S.settings;
   const f=(k,l,type='text',extra='')=>`<div class="field ${extra}"><label for="p-${k}">${l}</label><input type="${type}" id="p-${k}" data-p="${k}" value="${esc(s[k])}"></div>`;
-  return `<div class="head"><div><h1>Réglages</h1><p>Ces informations apparaissent sur tous tes documents.</p></div><button class="btn primary" id="save-params">Enregistrer</button></div>
+  return `<div class="head head-sticky"><div><h1>Réglages</h1><p>Ces informations apparaissent sur tous tes documents.</p></div><button class="btn primary" id="save-params">Enregistrer</button></div>
   <div class="panel"><div class="sec-title">Ton entreprise</div><div class="form">
     ${f('prenom','Ton prénom (pour l\'accueil)')}${f('nom','Nom ou raison sociale')}${f('forme','Forme juridique')}${f('siren','SIREN (9 chiffres)')}${f('siret','SIRET (14 chiffres, pour Chorus Pro)')}${f('rcs','RCS / RM (ville d\'immatriculation)')}
     ${f('adresse','Adresse','text','full')}${f('cp','Code postal')}${f('ville','Ville')}${f('tel','Téléphone','tel')}${f('email','E-mail','email')}
