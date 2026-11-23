@@ -790,8 +790,8 @@ function vParams(){
     ${f('penalites','Pénalités de retard','text','full')}
     <div class="field full"><label for="p-lienSurPdf">Lien de paiement par carte (SumUp)</label><select id="p-lienSurPdf" data-p="lienSurPdf"><option value="true" ${s.lienSurPdf!==false?'selected':''}>Sur le PDF de la facture et dans l'e-mail</option><option value="false" ${s.lienSurPdf===false?'selected':''}>Dans l'e-mail seulement (pas sur le PDF)</option></select><span class="hint">Les clients publics (Chorus Pro) n'ont jamais de lien de paiement, quel que soit ce choix.</span></div>
     <div class="field full"><label for="p-mentionsLibres">Mentions libres sur tous les documents (assurance, garanties…)</label><textarea id="p-mentionsLibres" data-p="mentionsLibres">${esc(s.mentionsLibres)}</textarea></div>
-    <div class="field full"><label for="p-conditionsDevis">Conditions de réservation (imprimées sur les devis)</label><textarea id="p-conditionsDevis" data-p="conditionsDevis" style="min-height:150px">${esc(s.conditionsDevis)}</textarea><span class="hint">Une condition par ligne. Sur chaque devis, tu coches celles à imprimer.</span></div>
-    <div class="field full"><label for="p-conditionsFacture">Conditions imprimées sur les factures</label><textarea id="p-conditionsFacture" data-p="conditionsFacture" style="min-height:120px">${esc(s.conditionsFacture)}</textarea><span class="hint">Une condition par ligne. Sur chaque facture, tu coches celles à imprimer. Laisse vide pour n'en mettre aucune.</span></div>
+    ${condEditor('conditionsDevis','Conditions de réservation (imprimées sur les devis)',"Une condition par case. Sur chaque devis, tu coches celles à imprimer.")}
+    ${condEditor('conditionsFacture','Conditions imprimées sur les factures',"Une condition par case. Sur chaque facture, tu coches celles à imprimer. Supprime toutes les cases pour n'en mettre aucune.")}
   </div></div>
   ${HOSTED?`<div class="panel"><div class="sec-title">L'appli sur ton téléphone</div><div class="body" style="padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px">
     ${window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches?`<span style="color:var(--ok);font-weight:600">✓ Tu utilises déjà l'appli installée.</span>`:`
@@ -847,8 +847,9 @@ function bindView(v){
   if(sp){
     let regime=S.settings.regimeTva;
     $$('#seg-tva button',v).forEach(b=>b.addEventListener('click',()=>{regime=b.dataset.v;$$('#seg-tva button',v).forEach(x=>x.classList.toggle('on',x===b));}));
-    sp.addEventListener('click',()=>{const data={...S.settings};$$('[data-p]',v).forEach(i=>{let val=i.value;if(i.type==='number')val=+val||0;if(val==='true')val=true;if(val==='false')val=false;data[i.dataset.p]=val;});data.regimeTva=regime;
+    sp.addEventListener('click',()=>{const data={...S.settings};$$('[data-p]',v).forEach(i=>{let val=i.value;if(i.type==='number')val=+val||0;if(val==='true')val=true;if(val==='false')val=false;data[i.dataset.p]=val;});data.regimeTva=regime;readCondEditors(v,data);
       safe(()=>putSettings(data),'Réglages enregistrés');});
+    bindCondEditors(v);
     $('#export-csv',v).addEventListener('click',exportCsv);
     $('#bk-export',v).addEventListener('click',exportBackup);
     const pi=$('#pwa-install',v);if(pi)pi.addEventListener('click',async()=>{const ev=S.installPrompt;if(!ev)return;S.installPrompt=null;try{ev.prompt();const r=await ev.userChoice;toast(r&&r.outcome==='accepted'?'Appli installée':'Installation annulée');}catch(e){}render();});
@@ -1510,6 +1511,14 @@ function evtLines(d){
   return out;
 }
 function acompteDemande(d){if(d.type!=='devis'||!d.acompteDemande)return null;const pct=+d.acomptePct||30;return {pct,mt:r2(totals(d).ttc*pct/100)};}
+/* settings: one text box per condition, with add / delete */
+const condRowHtml=v=>`<div class="cond-row" style="display:flex;gap:8px;align-items:flex-start"><textarea class="cond-in" rows="2" style="min-height:44px;flex:1" placeholder="Écris la condition…">${esc(v)}</textarea><button type="button" class="btn ghost sm" data-cond-del aria-label="Supprimer cette condition" title="Supprimer" style="flex:none;margin-top:4px">${ICON.x}</button></div>`;
+function condEditor(k,label,hint){const items=String(S.settings[k]||'').split('\n').map(x=>x.replace(/^[•\-*]\s*/,'').trim()).filter(Boolean);
+  return `<div class="field full"><label>${label}</label><div class="cond-list" data-cond-list="${k}" style="display:flex;flex-direction:column;gap:8px">${items.map(condRowHtml).join('')}</div><div><button type="button" class="btn sm" data-cond-add="${k}" style="margin-top:8px">+ Ajouter une condition</button></div><span class="hint">${hint}</span></div>`;}
+function bindCondEditors(v){if(v._condBound)return;v._condBound=1;
+  v.addEventListener('click',e=>{const add=e.target.closest('[data-cond-add]');if(add){const list=$(`[data-cond-list="${add.dataset.condAdd}"]`,v);list.insertAdjacentHTML('beforeend',condRowHtml(''));const ins=$$('.cond-in',list);ins[ins.length-1].focus();return;}
+    const del=e.target.closest('[data-cond-del]');if(del)del.closest('.cond-row').remove();});}
+const readCondEditors=(v,data)=>$$('[data-cond-list]',v).forEach(l=>{data[l.dataset.condList]=$$('.cond-in',l).map(t=>t.value.replace(/\s*\n\s*/g,' ').trim()).filter(Boolean).join('\n');});
 /* conditions: one list for quotes, one for invoices; each document can untick lines (condOff) */
 const condTitle=d=>d&&d.type==='devis'?'Conditions de réservation':'Conditions';
 function condRaw(d){const k=d&&d.type==='devis'?'conditionsDevis':d&&d.type==='facture'?'conditionsFacture':'';return k?[...new Set(String(S.settings[k]||'').split('\n').map(x=>x.replace(/^[•\-*]\s*/,'').trim()).filter(Boolean))]:[];}
