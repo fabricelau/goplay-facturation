@@ -1,7 +1,7 @@
 {
-  "version": "1.14.1",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.14.1.zip",
+  "version": "1.14.2",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.14.2.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Nouvelle icône pour l'écran d'accueil."
+  "changelog": "Icône de l'écran d'accueil avec le logo GoPlay Arena."
 }
