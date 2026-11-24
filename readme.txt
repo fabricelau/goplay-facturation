@@ -1,5 +1,5 @@
 === Goplay Arena Facturation ===
-Version : 1.14.5
+Version : 1.14.6
 
 Outil de devis et factures de GB GLOBAL (Goplay Arena), accessible sur /facturation.
 Réservé aux administrateurs WordPress du site.
@@ -47,3 +47,6 @@ La désactivation de l'extension ne supprime aucune donnée.
 
 = 1.14.5 =
 - PDF : un nom de client ou une adresse trop longs passent à la ligne dans le cadre au lieu de dépasser.
+
+= 1.14.6 =
+- Factures : étiquette jaune « Chorus » dans la colonne Statut pour les factures Chorus (client public ou numéro d'engagement).

@@ -112,6 +112,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;justify-self:start}
 .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 .p-draft{background:var(--neutral-soft);color:var(--muted)}
+.p-chorus{background:#FDE68A;color:#6B4E00}
+.c-st{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 .p-sent{background:var(--info-soft);color:var(--info)}
 .p-ok{background:var(--ok-soft);color:var(--ok)}
 .p-warn{background:var(--warn-soft);color:var(--warn)}
@@ -470,7 +472,7 @@ const STAT={
   facture:{brouillon:['Brouillon','p-draft'],emise:['À encaisser','p-sent'],retard:['En retard','p-warn'],payee:['Payée','p-ok'],avoiree:['Annulée (avoir)','p-draft']},
   avoir:{brouillon:['Brouillon','p-draft'],emis:['Émis','p-acc']}
 };
-const pill=d=>{const [l,c]=inCorrection(d)?['En correction','p-warn']:(STAT[d.type]||{})[statusOf(d)]||['—','p-draft'];return `<span class="pill ${c}">${l}</span>`;};
+const pill=d=>{const [l,c]=inCorrection(d)?['En correction','p-warn']:(STAT[d.type]||{})[statusOf(d)]||['—','p-draft'];return `<span class="pill ${c}">${l}</span>${d.type==='facture'&&(isChorus(d)||String(d.engagement||'').trim())?' <span class="pill p-chorus" title="Facture pour Chorus Pro">Chorus</span>':''}`;};
 const TYPE_LBL={devis:'Devis',facture:'Facture',avoir:'Avoir'};
 async function exportBackup(){
   if(!S.dl){toast("Le téléchargement n'est pas disponible dans cette vue.");return;}

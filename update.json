@@ -1,7 +1,7 @@
 {
-  "version": "1.14.5",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.14.5.zip",
+  "version": "1.14.6",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.14.6.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "PDF : les noms de clients longs passent à la ligne dans le cadre."
+  "changelog": "Étiquette jaune « Chorus » sur les factures Chorus."
 }
