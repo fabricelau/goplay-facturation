@@ -1,5 +1,5 @@
 === Goplay Arena Facturation ===
-Version : 1.14.2
+Version : 1.14.3
 
 Outil de devis et factures de GB GLOBAL (Goplay Arena), accessible sur /facturation.
 Réservé aux administrateurs WordPress du site.
@@ -37,3 +37,6 @@ La désactivation de l'extension ne supprime aucune donnée.
 
 = 1.14.2 =
 - Icône de l'écran d'accueil : le logo GoPlay Arena (hexagone néon).
+
+= 1.14.3 =
+- Icône : logo GoPlay Arena + facture néon.
