@@ -156,6 +156,7 @@ fieldset{border:0;margin:0;padding:0}
 .lines td input,.lines td select{padding:7px 8px}
 .lines .w-q{width:72px}.lines .w-u{width:84px}.lines .w-p{width:110px}.lines .w-t{width:86px}.lines .w-tot{width:110px;text-align:right;padding-top:13px}
 .lines textarea{min-height:34px;margin-top:4px;font-size:13px;padding:6px 8px}
+.lines .l-num{display:none}
 .add-row{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;align-items:center}
 .add-row select{width:auto;max-width:100%}
 .totals{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-top:1px solid var(--line);align-items:flex-end}
@@ -262,6 +263,21 @@ fieldset{border:0;margin:0;padding:0}
   .li .c-amt{grid-column:2;grid-row:2}
   .li .c-st{grid-column:2;grid-row:3;justify-self:end}
   .form{grid-template-columns:1fr}
+  /* line editor: one card per line instead of a wide table */
+  .lines{overflow-x:visible;padding:10px 12px 2px}
+  .modal .lines{padding:0}
+  .lines table{min-width:0;display:block;width:100%}.lines thead{display:none}.lines tbody{display:block}
+  .lines tr{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding:12px;margin-bottom:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+  .lines td{display:block;padding:0;border:0;min-width:0;width:auto!important}
+  .lines td[data-lb]::before{content:attr(data-lb);display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin-bottom:4px}
+  .lines .c-des{grid-column:1/-1}
+  .lines .l-num{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin-bottom:4px}
+  .lines .w-q,.lines .w-u,.lines .w-p,.lines .w-t{grid-column:span 2}
+  .lines .w-tot{grid-column:span 3;text-align:left;padding-top:0;font-size:17px;font-weight:600;align-self:end}
+  .lines tr:not(:has(.w-t)) .w-tot{grid-column:span 5}
+  .lines .c-rm{grid-column:-2/-1;align-self:end;justify-self:end}
+  .lines td input,.lines td select{width:100%;font-size:16px;padding:10px}
+  .lines textarea{width:100%;font-size:16px;min-height:72px;margin-top:8px;padding:10px}
   .paper{padding:20px 16px;font-size:10.5px}
   .pp-cl{width:100%}
   .pp-tot{width:100%}
@@ -992,20 +1008,24 @@ function formHtml(d){
 function linesHtml(d){
   const fr=isFranchise();
   return `<table><thead><tr><th>Désignation</th><th class="w-q">Qté</th><th class="w-u">Unité</th><th class="w-p">${isTTC(d)?'PU TTC':'PU HT'}</th>${fr?'':'<th class="w-t">TVA</th>'}<th class="w-tot" style="padding-top:8px">${isTTC(d)?'Total TTC':'Total HT'}</th><th></th></tr></thead><tbody>
-  ${d.lignes.map((l,i)=>`<tr data-i="${i}"><td><input type="text" data-l="designation" value="${esc(l.designation)}" placeholder="Désignation" aria-label="Désignation ligne ${i+1}"><textarea data-l="details" placeholder="Détails (facultatif)" aria-label="Détails ligne ${i+1}">${esc(l.details)}</textarea></td>
-    <td class="w-q"><input type="number" step="any" data-l="qte" value="${esc(l.qte)}" aria-label="Quantité"></td>
-    <td class="w-u"><select data-l="unite" aria-label="Unité">${UNITES.map(u=>`<option ${u===l.unite?'selected':''}>${u}</option>`).join('')}</select></td>
-    <td class="w-p">${isTTC(d)?`<input type="number" step="0.01" data-l="puTTC" value="${esc(l.puTTC??'')}" aria-label="Prix unitaire TTC">`:`<input type="number" step="0.01" data-l="pu" value="${esc(l.pu)}" aria-label="Prix unitaire HT">`}</td>
-    ${fr?'':`<td class="w-t"><select data-l="tva" aria-label="TVA">${TVA_RATES.map(t=>`<option value="${t}" ${+t===+l.tva?'selected':''}>${fmtTaux(t)}</option>`).join('')}</select></td>`}
-    <td class="w-tot num" data-tot>${eur(isTTC(d)?lineTTC(l,d):lineHT(l,d))}</td>
-    <td><button class="btn ghost sm" data-rm="${i}" aria-label="Supprimer la ligne" ${d.lignes.length<2?'disabled':''}>${ICON.x}</button></td></tr>`).join('')}</tbody></table>`;
+  ${d.lignes.map((l,i)=>`<tr data-i="${i}"><td class="c-des"><span class="l-num">Ligne ${i+1}</span><input type="text" data-l="designation" value="${esc(l.designation)}" placeholder="Désignation" aria-label="Désignation ligne ${i+1}"><textarea data-l="details" placeholder="Détails (facultatif)" aria-label="Détails ligne ${i+1}">${esc(l.details)}</textarea></td>
+    <td class="w-q" data-lb="Qté"><input type="number" step="any" inputmode="decimal" data-l="qte" value="${esc(l.qte)}" aria-label="Quantité"></td>
+    <td class="w-u" data-lb="Unité"><select data-l="unite" aria-label="Unité">${UNITES.map(u=>`<option ${u===l.unite?'selected':''}>${u}</option>`).join('')}</select></td>
+    <td class="w-p" data-lb="${isTTC(d)?'PU TTC':'PU HT'}">${isTTC(d)?`<input type="number" step="0.01" inputmode="decimal" data-l="puTTC" value="${esc(l.puTTC??'')}" aria-label="Prix unitaire TTC">`:`<input type="number" step="0.01" inputmode="decimal" data-l="pu" value="${esc(l.pu)}" aria-label="Prix unitaire HT">`}</td>
+    ${fr?'':`<td class="w-t" data-lb="TVA"><select data-l="tva" aria-label="TVA">${TVA_RATES.map(t=>`<option value="${t}" ${+t===+l.tva?'selected':''}>${fmtTaux(t)}</option>`).join('')}</select></td>`}
+    <td class="w-tot num" data-tot data-lb="${isTTC(d)?'Total TTC':'Total HT'}">${eur(isTTC(d)?lineTTC(l,d):lineHT(l,d))}</td>
+    <td class="c-rm"><button class="btn ghost sm" data-rm="${i}" aria-label="Supprimer la ligne" ${d.lignes.length<2?'disabled':''}>${ICON.x}</button></td></tr>`).join('')}</tbody></table>`;
 }
 function renderTotals(){
   const t=totals(S.edit);const el=$('#e-totals');if(!el)return;
   el.innerHTML=`<div><span class="muted">Total HT</span><span class="num">${eur(t.ht)}</span></div>${isFranchise()?'':t.tvas.map(x=>`<div><span class="muted">TVA ${fmtTaux(x.taux)}</span><span class="num">${eur(x.montant)}</span></div>`).join('')}<div class="big"><span>Total TTC</span><span class="num">${eur(t.ttc)}</span></div>`;
 }
+/* the details box grows with its text, so nothing is hidden while typing */
+const fitTa=t=>{t.style.height='auto';t.style.height=Math.min(t.scrollHeight+2,320)+'px';};
+['input','focusin'].forEach(ev=>document.addEventListener(ev,e=>{const t=e.target;if(t&&t.tagName==='TEXTAREA'&&t.closest('.lines'))fitTa(t);}));
 function bindLines(ed){
   const box=$('#e-lines',ed);
+  const fitAll=()=>$$('textarea',box).forEach(t=>{if(t.value)fitTa(t);});new MutationObserver(fitAll).observe(box,{childList:true});requestAnimationFrame(fitAll);
   box.addEventListener('input',e=>{const tr=e.target.closest('tr[data-i]');if(!tr)return;const l=S.edit.lignes[+tr.dataset.i];const k=e.target.dataset.l;if(!k)return;
     l[k]=['qte','pu','puTTC','tva'].includes(k)?(e.target.value===''?'':+e.target.value):e.target.value;
     $('[data-tot]',tr).textContent=eur(isTTC(S.edit)?lineTTC(l,S.edit):lineHT(l,S.edit));updatePreview();});
@@ -1570,12 +1590,12 @@ function formuleForm(f){
   const ttcMode=S.settings.saisiePrix==='ttc';
   const x=f?JSON.parse(JSON.stringify(f)):{id:null,nom:'',lignes:[]};
   if(!x.lignes.length)x.lignes=[{designation:'',details:'',qte:1,unite:'u',pu:0,puTTC:0,tva:isFranchise()?0:8.5}];
-  const rows=()=>x.lignes.map((l,i)=>`<tr data-i="${i}"><td><input type="text" data-l="designation" value="${esc(l.designation)}" placeholder="Désignation" aria-label="Désignation"></td>
-    <td style="width:70px"><input type="number" step="any" data-l="qte" value="${esc(l.qte)}" aria-label="Quantité"></td>
-    <td style="width:90px"><select data-l="unite" aria-label="Unité">${UNITES.map(u=>`<option ${u===l.unite?'selected':''}>${u}</option>`).join('')}</select></td>
-    <td style="width:100px"><input type="number" step="0.01" data-l="${ttcMode?'puTTC':'pu'}" value="${esc(ttcMode?l.puTTC:l.pu)}" aria-label="Prix"></td>
-    ${isFranchise()?'':`<td style="width:86px"><select data-l="tva" aria-label="TVA">${TVA_RATES.map(t=>`<option value="${t}" ${+t===+l.tva?'selected':''}>${fmtTaux(t)}</option>`).join('')}</select></td>`}
-    <td style="width:40px"><button class="btn ghost sm" data-rmf="${i}" aria-label="Retirer">${ICON.x}</button></td></tr>`).join('');
+  const rows=()=>x.lignes.map((l,i)=>`<tr data-i="${i}"><td class="c-des"><span class="l-num">Ligne ${i+1}</span><input type="text" data-l="designation" value="${esc(l.designation)}" placeholder="Désignation" aria-label="Désignation"></td>
+    <td class="w-q" data-lb="Qté" style="width:70px"><input type="number" step="any" inputmode="decimal" data-l="qte" value="${esc(l.qte)}" aria-label="Quantité"></td>
+    <td class="w-u" data-lb="Unité" style="width:90px"><select data-l="unite" aria-label="Unité">${UNITES.map(u=>`<option ${u===l.unite?'selected':''}>${u}</option>`).join('')}</select></td>
+    <td class="w-p" data-lb="${ttcMode?'PU TTC':'PU HT'}" style="width:100px"><input type="number" step="0.01" inputmode="decimal" data-l="${ttcMode?'puTTC':'pu'}" value="${esc(ttcMode?l.puTTC:l.pu)}" aria-label="Prix"></td>
+    ${isFranchise()?'':`<td class="w-t" data-lb="TVA" style="width:86px"><select data-l="tva" aria-label="TVA">${TVA_RATES.map(t=>`<option value="${t}" ${+t===+l.tva?'selected':''}>${fmtTaux(t)}</option>`).join('')}</select></td>`}
+    <td class="c-rm" style="width:40px"><button class="btn ghost sm" data-rmf="${i}" aria-label="Retirer">${ICON.x}</button></td></tr>`).join('');
   openModal(`<div class="panel-h"><h2>${f?'Modifier la formule':'Nouvelle formule'}</h2><button class="btn ghost sm" data-a="close" aria-label="Fermer">${ICON.x}</button></div>
     <div class="body">
       <div class="field"><label for="fm-nom">Nom de la formule</label><input type="text" id="fm-nom" value="${esc(x.nom)}" placeholder="Ex. Anniversaire 10 enfants"></div>
