@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Goplay Arena Facturation
  * Description: Devis, factures, acomptes et paiements SumUp pour GB GLOBAL (Goplay Arena). L'outil est accessible sur /facturation, réservé aux administrateurs du site.
- * Version: 1.14.0
+ * Version: 1.14.1
  * Update URI: https://github.com/fabricelau/goplay-facturation
  * Requires PHP: 7.4
  * Author: Goplay Arena
@@ -11,7 +11,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('GPF_VERSION', '1.14.0');
+define('GPF_VERSION', '1.14.1');
 define('GPF_UPDATE_JSON', 'https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/update.json');
 define('GPF_DIR', plugin_dir_path(__FILE__));
 define('GPF_SLUG', 'facturation');
@@ -173,7 +173,7 @@ function gpf_nocache() {
 function gpf_manifest() {
     gpf_nocache();
     header('Content-Type: application/manifest+json; charset=utf-8');
-    $icon = function ($f) { return plugins_url('app/icons/' . $f, __FILE__); };
+    $icon = function ($f) { return add_query_arg('v', GPF_VERSION, plugins_url('app/icons/' . $f, __FILE__)); };
     echo wp_json_encode([
         'name' => 'Goplay Arena Facturation', 'short_name' => 'Facturation', 'lang' => 'fr',
         'start_url' => home_url('/' . GPF_SLUG . '/'), 'scope' => home_url('/' . GPF_SLUG . '/'), 'id' => home_url('/' . GPF_SLUG . '/'),
@@ -220,7 +220,7 @@ function gpf_render_app() {
     $shim = file_get_contents(GPF_DIR . 'app/shim.js');
     echo "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><meta name=\"robots\" content=\"noindex,nofollow\">";
     $base = home_url('/' . GPF_SLUG . '/');
-    echo '<link rel="manifest" href="' . esc_url($base . 'manifest.webmanifest') . '"><meta name="theme-color" content="#0E2F2B"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Facturation"><link rel="apple-touch-icon" href="' . esc_url(plugins_url('app/icons/apple-touch-icon.png', __FILE__)) . '"><link rel="icon" type="image/png" href="' . esc_url(plugins_url('app/icons/icon-192.png', __FILE__)) . '">';
+    echo '<link rel="manifest" href="' . esc_url($base . 'manifest.webmanifest') . '"><meta name="theme-color" content="#0E2F2B"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Facturation"><link rel="apple-touch-icon" href="' . esc_url(add_query_arg('v', GPF_VERSION, plugins_url('app/icons/apple-touch-icon.png', __FILE__))) . '"><link rel="icon" type="image/png" href="' . esc_url(plugins_url('app/icons/icon-192.png', __FILE__)) . '">';
     echo "<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>";
     echo '<script>window.GPF=' . wp_json_encode($cfg) . ";\n" . $shim . '</script>';
     echo '</head><body>' . $app . '</body></html>';

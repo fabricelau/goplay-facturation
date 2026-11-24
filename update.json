@@ -1,7 +1,7 @@
 {
-  "version": "1.14.0",
-  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.14.0.zip",
+  "version": "1.14.1",
+  "package": "https://raw.githubusercontent.com/fabricelau/goplay-facturation/main/dist/goplay-facturation-1.14.1.zip",
   "requires_php": "7.4",
   "tested": "7.1",
-  "changelog": "Mises à jour instantanées depuis GitHub (moins d'une minute), sinon vérification toutes les heures."
+  "changelog": "Nouvelle icône pour l'écran d'accueil."
 }
