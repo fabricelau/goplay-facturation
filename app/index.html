@@ -1280,9 +1280,12 @@ function buildPdf(d,fx){
   if(d.type==='facture'){txt('Échéance : '+fmtDate(d.echeance),W-M,ty,{a:'right'});ty+=4.5;}
   if(d.type==='devis'){txt('Validité : '+fmtDate(d.validite),W-M,ty,{a:'right'});ty+=4.5;}
   y=Math.max(yy,ty)+6;
-  const cx=110,cl=clLines(c);const ch=8+5+cl.length*4.2;
+  /* client box: long names and address lines wrap inside the frame */
+  const cx=110,cw=W-M-cx-8;p.setFont(FF,'bold');p.setFontSize(10);const cn=p.splitTextToSize(c&&c.nom?String(c.nom):'',cw);
+  p.setFont(FF,'normal');p.setFontSize(8.5);const cl=[];clLines(c).forEach(l=>cl.push(...p.splitTextToSize(String(l),cw)));
+  const nh=Math.max(1,cn.length)*4.6;const ch=8+nh+0.4+cl.length*4.2;
   p.setDrawColor(...LINE);p.roundedRect(cx,y,W-M-cx,ch,1.5,1.5);
-  txt(c?c.nom:'',cx+4,y+6,{b:1,s:10});cl.forEach((l,i)=>txt(l,cx+4,y+11+i*4.2,{c:MUT,s:8.5}));
+  cn.forEach((l,i)=>txt(l,cx+4,y+6+i*4.6,{b:1,s:10}));cl.forEach((l,i)=>txt(l,cx+4,y+6.4+nh+i*4.2,{c:MUT,s:8.5}));
   y+=ch+8;
   if(d.objet){p.setFont(FF,'bold');p.setFontSize(9.5);p.setTextColor(...INK);p.text('Objet : ',M,y);const w=p.getTextWidth('Objet : ');p.setFont(FF,'normal');p.text(p.splitTextToSize(d.objet,W-2*M-w),M+w,y);y+=7;}
   const ev=evtLines(d);if(ev.length){const lines=[];p.setFontSize(9);ev.forEach(x=>lines.push(...p.splitTextToSize(x,W-2*M-6)));p.setDrawColor(...ACC);p.setLineWidth(.8);p.line(M,y-3.5,M,y-3.5+lines.length*4.4);p.setLineWidth(.2);p.setFont(FF,'normal');p.setTextColor(...INK);p.text(lines,M+4,y);y+=lines.length*4.4+4;}
