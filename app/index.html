@@ -387,6 +387,8 @@ const ICON={
 };
 const VIEWS=[['tableau','Tableau de bord'],['devis','Devis'],['factures','Factures'],['avoirs','Avoirs'],['clients','Clients'],['catalogue','Catalogue'],['parametres','Réglages']];
 const TVA_RATES=[8.5,2.1,1.05,0,20,10,5.5];
+/* VAT rate given to every new line (Réglages → TVA par défaut) */
+const defTva=()=>{if(isFranchise())return 0;const v=parseFloat(S.settings.tvaDefaut);return TVA_RATES.includes(v)?v:2.1;};
 const UNITES=['u','h','jour','forfait','m²','ml','m³','kg','lot'];
 const MODES=['Carte (terminal SumUp)','Lien de paiement SumUp','Virement','Espèces','Chèque'];
 const NATURES={services:'Prestation de services',biens:'Livraison de biens',mixte:'Mixte (biens et services)'};
@@ -402,7 +404,7 @@ Les sommes versées restent acquises en cas d'absence ou d'annulation moins de 2
 Le client est responsable des dégradations volontaires du matériel prêté.`;
 const EVT_KEYS=['evtDate','evtHeure','evtDuree','participants','accompagnateurs','evtNote','montantFerme'];
 const evtOf=d=>Object.fromEntries(EVT_KEYS.filter(k=>d[k]!=null&&d[k]!=='').map(k=>[k,d[k]]));
-const DEFAULT_SETTINGS={nom:'',forme:'Entreprise individuelle',siren:'',rcs:'',adresse:'',cp:'',ville:'',tel:'',email:'',tvaIntra:'',regimeTva:'normal',tvaSurDebits:false,saisiePrix:'ht',logo:'',logoW:0,logoH:0,conditionsDevis:DEFAULT_COND,conditionsFacture:DEFAULT_COND_FACT,iban:'',bic:'',delaiPaiement:30,validiteDevis:30,
+const DEFAULT_SETTINGS={nom:'',forme:'Entreprise individuelle',siren:'',rcs:'',adresse:'',cp:'',ville:'',tel:'',email:'',tvaIntra:'',regimeTva:'normal',tvaDefaut:'2.1',tvaSurDebits:false,saisiePrix:'ht',logo:'',logoW:0,logoH:0,conditionsDevis:DEFAULT_COND,conditionsFacture:DEFAULT_COND_FACT,iban:'',bic:'',delaiPaiement:30,validiteDevis:30,
   prefixeFacture:'F',prefixeDevis:'D',prefixeAvoir:'AV',annee:true,debutFacture:1,debutDevis:1,debutAvoir:1,mentionsLibres:'',penalites:"Taux d'intérêt de la BCE majoré de 10 points"};
 
 /* ---------- state ---------- */
@@ -569,7 +571,7 @@ function newDoc(type,base={}){
   const d={id:uid(),type,statut:'brouillon',...(S.settings.modeTest?{test:true}:{}),saisie:S.settings.saisiePrix==='ttc'?'ttc':'ht',date:today(),clientId:'',client:null,objet:'',nature:'services',lignes:[],notes:'',lienPaiement:'',createdAt:new Date().toISOString(),...base};
   if(type==='devis')d.validite=d.validite||addDays(d.date,S.settings.validiteDevis||30);
   if(type==='facture')d.echeance=d.echeance||addDays(d.date,S.settings.delaiPaiement??30);
-  if(!d.lignes.length)d.lignes=[{id:uid(),designation:'',details:'',qte:1,unite:'u',pu:0,puTTC:0,tva:isFranchise()?0:8.5}];
+  if(!d.lignes.length)d.lignes=[{id:uid(),designation:'',details:'',qte:1,unite:'u',pu:0,puTTC:0,tva:defTva()}];
   return d;
 }
 function validateForEmit(d){
@@ -638,7 +640,7 @@ document.addEventListener('click',e=>{const n=e.target.closest('[data-new]');if(
       <span class="hint muted" style="font-size:12.5px">Pour un acompte sur un devis existant, ouvre plutôt le devis et clique sur « Facture d'acompte ».</span>
     </div>`,dl=>{dl.addEventListener('click',ev=>{if(ev.target.closest('[data-a="close"]')){closeModal();return;}const k=ev.target.closest('[data-kind]');if(!k)return;closeModal();
       if(k.dataset.kind==='facture'){openEditor(newDoc('facture',base));return;}
-      const tva=isFranchise()?0:8.5;
+      const tva=defTva();
       openEditor(newDoc('facture',{...base,acompteLibre:true,objet:'Acompte',echeance:today(),lignes:[{id:uid(),designation:'Acompte',details:'',qte:1,unite:'forfait',pu:0,puTTC:0,tva}]}));});});
 });
 /* free deposit invoices of a client not yet deducted from a final invoice */
@@ -790,6 +792,7 @@ function vParams(){
     <span class="hint">${s.regimeTva==='franchise'?'La mention « TVA non applicable, art. 293 B du CGI » sera ajoutée automatiquement.':'Taux de La Réunion proposés par défaut : 8,5 % (normal), 2,1 % (réduit), 1,05 % (particulier).'}</span></div>
     ${f('tvaIntra','N° TVA intracommunautaire')}
     <div class="field"><label for="p-tvaSurDebits">Option pour le paiement de la TVA d'après les débits</label><select id="p-tvaSurDebits" data-p="tvaSurDebits"><option value="false" ${!s.tvaSurDebits?'selected':''}>Non</option><option value="true" ${s.tvaSurDebits?'selected':''}>Oui (mention ajoutée)</option></select></div>
+    ${isFranchise()?'':`<div class="field"><label for="p-tvaDefaut">TVA par défaut des nouvelles lignes</label><select id="p-tvaDefaut" data-p="tvaDefaut">${TVA_RATES.map(t=>`<option value="${t}" ${+t===+(s.tvaDefaut??2.1)?'selected':''}>${fmtTaux(t)}</option>`).join('')}</select><span class="hint">Tu peux toujours changer le taux sur chaque ligne.</span></div>`}
     <div class="field full"><label for="p-saisiePrix">Je saisis mes prix</label><select id="p-saisiePrix" data-p="saisiePrix"><option value="ttc" ${s.saisiePrix==='ttc'?'selected':''}>TTC (TVA comprise) — l'outil calcule le HT et la TVA</option><option value="ht" ${s.saisiePrix!=='ttc'?'selected':''}>HT (hors taxes) — l'outil ajoute la TVA</option></select><span class="hint">Les documents affichent toujours le détail HT, TVA et TTC, comme l'exige la loi. Le total TTC correspond exactement à tes prix.</span></div>
   </div></div>
   <div class="panel"><div class="sec-title">Numérotation</div><div class="form">
@@ -933,7 +936,7 @@ function clientForm(c){
     }));
 }
 function articleForm(a){
-  const x=a?{...a}:{id:null,designation:'',details:'',unite:'u',pu:'',puTTC:'',tva:isFranchise()?0:8.5};const modeTTC=S.settings.saisiePrix==='ttc';if(a&&modeTTC)x.puTTC=artTTC(a);
+  const x=a?{...a}:{id:null,designation:'',details:'',unite:'u',pu:'',puTTC:'',tva:defTva()};const modeTTC=S.settings.saisiePrix==='ttc';if(a&&modeTTC)x.puTTC=artTTC(a);
   openModal(`<div class="panel-h"><h2>${a?"Modifier l'article":'Nouvel article'}</h2><button class="btn ghost sm" data-a="close" aria-label="Fermer">${ICON.x}</button></div>
     <div class="form">
       <div class="field full"><label for="a-designation">Désignation</label><input type="text" id="a-designation" data-k="designation" value="${esc(x.designation)}"></div>
@@ -1045,14 +1048,14 @@ function bindForm(ed){
     const add=a=>{S.edit.lignes=[...S.edit.lignes.filter(l=>l.designation||hasPrice(l)),...deductLines(a)];renderEditor();toast(`Acompte ${a.numero} déduit`);};
     if(acs.length===1){add(acs[0]);return;}
     openModal(`<div class="panel-h"><h2>Déduire un acompte</h2><button class="btn ghost sm" data-a="close" aria-label="Fermer">${ICON.x}</button></div><div class="body" style="display:flex;flex-direction:column;gap:8px">${acs.map(a=>`<button class="li" data-ac="${a.id}" style="display:flex;justify-content:space-between;border:1px solid var(--line);border-radius:10px;padding:12px 14px"><span><b class="num">${esc(a.numero)}</b> · ${fmtDate(a.date)}${a.objet?' · '+esc(a.objet):''}</span><span class="num">${eur(totals(a).ttc)}</span></button>`).join('')}</div>`,dl=>dl.addEventListener('click',ev=>{if(ev.target.closest('[data-a="close"]')){closeModal();return;}const b=ev.target.closest('[data-ac]');if(!b)return;closeModal();add(acs.find(x=>x.id===b.dataset.ac));}));});
-  $('#e-addline',ed).addEventListener('click',()=>{S.edit.lignes.push({id:uid(),designation:'',details:'',qte:1,unite:'u',pu:0,puTTC:0,tva:isFranchise()?0:8.5});$('#e-lines').innerHTML=linesHtml(S.edit);updatePreview();const inp=$$('#e-lines tr[data-i] input[data-l="designation"]');inp[inp.length-1].focus();});
+  $('#e-addline',ed).addEventListener('click',()=>{S.edit.lignes.push({id:uid(),designation:'',details:'',qte:1,unite:'u',pu:0,puTTC:0,tva:defTva()});$('#e-lines').innerHTML=linesHtml(S.edit);updatePreview();const inp=$$('#e-lines tr[data-i] input[data-l="designation"]');inp[inp.length-1].focus();});
   const sa=$('#e-addart',ed);if(sa)sa.addEventListener('change',()=>{const a=S.articles.find(x=>x.id===sa.value);if(!a)return;const ls=S.edit.lignes;
-    const ln={id:uid(),designation:a.designation,details:a.details||'',qte:1,unite:a.unite||'u',pu:+a.pu||0,puTTC:artTTC(a),tva:isFranchise()?0:+(a.tva??8.5)};
+    const ln={id:uid(),designation:a.designation,details:a.details||'',qte:1,unite:a.unite||'u',pu:+a.pu||0,puTTC:artTTC(a),tva:isFranchise()?0:+(a.tva??defTva())};
     if(ls.length===1&&!ls[0].designation&&!hasPrice(ls[0]))ls[0]=ln;else ls.push(ln);$('#e-lines').innerHTML=linesHtml(S.edit);sa.value='';updatePreview();});
   const tc=$('#e-tocat',ed);if(tc)tc.addEventListener('click',e=>{e.preventDefault();saveDraft().then(()=>{closeEditor();location.hash='catalogue';},()=>{});});
   $$('select[data-f]',ed).forEach(i=>i.addEventListener('change',()=>{S.edit[i.dataset.f]=i.value;updatePreview();}));
   const sf=$('#e-addform',ed);if(sf)sf.addEventListener('change',()=>{const f=S.formules.find(x=>x.id===sf.value);if(!f)return;const ls=S.edit.lignes;
-    const add=(f.lignes||[]).map(l=>({id:uid(),designation:l.designation||'',details:l.details||'',qte:+l.qte||1,unite:l.unite||'u',pu:+l.pu||0,puTTC:+l.puTTC||r2((+l.pu||0)*(1+(isFranchise()?0:+l.tva||0)/100)),tva:isFranchise()?0:+(l.tva??8.5)}));
+    const add=(f.lignes||[]).map(l=>({id:uid(),designation:l.designation||'',details:l.details||'',qte:+l.qte||1,unite:l.unite||'u',pu:+l.pu||0,puTTC:+l.puTTC||r2((+l.pu||0)*(1+(isFranchise()?0:+l.tva||0)/100)),tva:isFranchise()?0:+(l.tva??defTva())}));
     if(ls.length===1&&!ls[0].designation&&!hasPrice(ls[0]))ls.splice(0,1);ls.push(...add);if(!S.edit.objet&&f.nom){S.edit.objet=f.nom;const o=$('#e-objet');if(o)o.value=f.nom;}
     $('#e-lines').innerHTML=linesHtml(S.edit);sf.value='';updatePreview();toast(`Formule « ${f.nom} » ajoutée`);});
   $('#e-remise',ed).addEventListener('click',remiseForm);
@@ -1065,7 +1068,7 @@ function bindForm(ed){
 function updatePreview(){renderTotals();const am=$('#e-acMt');if(am){const a=acompteDemande(S.edit);am.textContent=a?'soit '+eur(a.mt)+' TTC':'';}const p=$('#paper');if(p)p.innerHTML=paperHtml(S.edit);}
 
 function snapshotClient(c){return c?{emails:clientEmails(c),nom:c.nom,type:c.type,siren:c.siren||'',siret:c.siret||'',chorus:!!c.chorus,codeService:c.codeService||'',tvaIntra:c.tvaIntra||'',adresse:c.adresse||'',cp:c.cp||'',ville:c.ville||'',email:c.email||'',contact:c.contact||''}:null;}
-function cleanLines(d){d.lignes=(d.lignes||[]).filter(l=>l.designation||hasPrice(l)).map(l=>({...l,qte:+l.qte||0,pu:+l.pu||0,puTTC:+l.puTTC||0,tva:isFranchise()?0:+l.tva||0}));if(!d.lignes.length)d.lignes=[{id:uid(),designation:'',details:'',qte:1,unite:'u',pu:0,tva:8.5}];}
+function cleanLines(d){d.lignes=(d.lignes||[]).filter(l=>l.designation||hasPrice(l)).map(l=>({...l,qte:+l.qte||0,pu:+l.pu||0,puTTC:+l.puTTC||0,tva:isFranchise()?0:+l.tva||0}));if(!d.lignes.length)d.lignes=[{id:uid(),designation:'',details:'',qte:1,unite:'u',pu:0,tva:defTva()}];}
 async function saveDraft(){const d=S.edit;d.client=snapshotClient(clientById(d.clientId));await safe(()=>put('docs',JSON.parse(JSON.stringify(d))),'Brouillon enregistré');S.edit=JSON.parse(JSON.stringify(d));}
 async function emit(){
   const d=S.edit;const errs=validateForEmit(d);
@@ -1594,7 +1597,7 @@ function vFormules(tabs){
 function formuleForm(f){
   const ttcMode=S.settings.saisiePrix==='ttc';
   const x=f?JSON.parse(JSON.stringify(f)):{id:null,nom:'',lignes:[]};
-  if(!x.lignes.length)x.lignes=[{designation:'',details:'',qte:1,unite:'u',pu:0,puTTC:0,tva:isFranchise()?0:8.5}];
+  if(!x.lignes.length)x.lignes=[{designation:'',details:'',qte:1,unite:'u',pu:0,puTTC:0,tva:defTva()}];
   const rows=()=>x.lignes.map((l,i)=>`<tr data-i="${i}"><td class="c-des"><span class="l-num">Ligne ${i+1}</span><input type="text" data-l="designation" value="${esc(l.designation)}" placeholder="Désignation" aria-label="Désignation"></td>
     <td class="w-q" data-lb="Qté" style="width:70px"><input type="number" step="any" inputmode="decimal" data-l="qte" value="${esc(l.qte)}" aria-label="Quantité"></td>
     <td class="w-u" data-lb="Unité" style="width:90px"><select data-l="unite" aria-label="Unité">${UNITES.map(u=>`<option ${u===l.unite?'selected':''}>${u}</option>`).join('')}</select></td>
@@ -1615,8 +1618,8 @@ function formuleForm(f){
       const t=isFranchise()?0:+l.tva||0;if(ttcMode)l.pu=r2((+l.puTTC||0)/(1+t/100));else l.puTTC=r2((+l.pu||0)*(1+t/100));tot();};
     tb.addEventListener('input',onEdit);tb.addEventListener('change',onEdit);
     tb.addEventListener('click',e=>{const b=e.target.closest('[data-rmf]');if(!b)return;x.lignes.splice(+b.dataset.rmf,1);tb.innerHTML=rows();tot();});
-    $('#fm-add',dl).addEventListener('click',()=>{x.lignes.push({designation:'',details:'',qte:1,unite:'u',pu:0,puTTC:0,tva:isFranchise()?0:8.5});tb.innerHTML=rows();tot();});
-    const fa=$('#fm-art',dl);if(fa)fa.addEventListener('change',()=>{const a=S.articles.find(z=>z.id===fa.value);if(!a)return;x.lignes=x.lignes.filter(l=>l.designation||+l.pu||+l.puTTC);x.lignes.push({designation:a.designation,details:a.details||'',qte:1,unite:a.unite||'u',pu:+a.pu||0,puTTC:artTTC(a),tva:+(a.tva??8.5)});fa.value='';tb.innerHTML=rows();tot();});
+    $('#fm-add',dl).addEventListener('click',()=>{x.lignes.push({designation:'',details:'',qte:1,unite:'u',pu:0,puTTC:0,tva:defTva()});tb.innerHTML=rows();tot();});
+    const fa=$('#fm-art',dl);if(fa)fa.addEventListener('change',()=>{const a=S.articles.find(z=>z.id===fa.value);if(!a)return;x.lignes=x.lignes.filter(l=>l.designation||+l.pu||+l.puTTC);x.lignes.push({designation:a.designation,details:a.details||'',qte:1,unite:a.unite||'u',pu:+a.pu||0,puTTC:artTTC(a),tva:+(a.tva??defTva())});fa.value='';tb.innerHTML=rows();tot();});
     dl.addEventListener('click',async e=>{const b=e.target.closest('[data-a]');if(!b)return;
       if(b.dataset.a==='close')closeModal();
       if(b.dataset.a==='save'){x.nom=$('#fm-nom',dl).value.trim();x.lignes=x.lignes.filter(l=>l.designation);if(!x.nom){toast('Donne un nom à la formule');return;}if(!x.lignes.length){toast('Ajoute au moins une ligne avec une désignation');return;}
